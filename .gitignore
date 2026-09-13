@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+build/
+dist/
+
+# Environments
+.venv/
+venv/
+env/
+
+# Raw data (large, not tracked in git; see data/README.md)
+/Datasets/
+/data/*.csv
+/data/*.zip
+/data/*.xlsx
+!/data/README.md
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.claude/
+
+# Project brief PDFs (course material, not project deliverables)
+*.pdf
