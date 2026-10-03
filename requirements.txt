@@ -5,3 +5,5 @@ matplotlib
 pytest
 pytest-html
 pdoc
+duckdb
+openpyxl

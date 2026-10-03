@@ -28,3 +28,7 @@ Thumbs.db
 
 # Project brief PDFs (course material, not project deliverables)
 *.pdf
+
+# Local profiling cache built by scripts/profile_raw_data.py
+/data/*.duckdb
+/data/*.duckdb.wal

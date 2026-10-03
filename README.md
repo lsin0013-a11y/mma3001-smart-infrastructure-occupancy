@@ -12,7 +12,7 @@ The dataset provides time-stamped building occupancy readings and environmental 
 
 > Develop a computational method that uses time-stamped building sensor data to understand, estimate or predict occupancy and environmental behaviour.
 
-Candidate directions being considered include: predicting room occupancy from environmental readings, reconstructing missing sensor measurements, detecting unusual environmental conditions, and characterising daily/weekly operating patterns. The final scope will be recorded here once selected.
+**Selected direction: predicting room occupancy.** A raw-data audit ([`reports/data_audit_findings.md`](reports/data_audit_findings.md)) found the occupancy data strong: 9.1 M headcount events across 5 spaces from Nov 2023 to Apr 2026, about 2 s resolution while a space is occupied. The environmental data can't support estimating occupancy from in-room readings: 3 of the 5 env sensors are frozen, the 2 live ones are live in windows that don't overlap, and no env sensor can be placed in the same room as an occupancy space. The working framing is therefore to **forecast each space's hourly headcount / probability of being occupied from past occupancy, calendar and weather features**, with the hour-of-week average profile as the baseline. The exact scope will be confirmed once the sensor-to-room mapping has been checked with the teaching team.
 
 ## Repository structure
 
@@ -23,7 +23,10 @@ Candidate directions being considered include: predicting room occupancy from en
 │   ├── preprocessing.py   # gap detection, missing-value handling
 │   └── analysis.py        # summary statistics, occupancy/environment merging
 ├── tests/                  # pytest test suite
+├── scripts/
+│   └── profile_raw_data.py  # reproducible raw-data audit (DuckDB)
 ├── reports/
+│   ├── data_audit_findings.md  # raw-data audit: coverage, errors, suitability
 │   └── test_report.html   # generated pytest HTML test report
 ├── docs/                   # generated HTML API documentation (pdoc)
 ├── data/                   # not tracked in git — see data/README.md
@@ -43,6 +46,15 @@ pip install -e .                 # install smart_infra as an editable package
 ```
 
 Place the raw dataset locally per `data/README.md` (the raw files are large and are not committed to this repository).
+
+## Auditing the raw data
+
+```bash
+pip install duckdb openpyxl
+python scripts/profile_raw_data.py
+```
+
+This prints every figure quoted in [`reports/data_audit_findings.md`](reports/data_audit_findings.md). It reads the raw exports and never modifies them, and it caches parsed tables in `data/profile_cache.duckdb` (untracked).
 
 ## Running the tests
 
@@ -76,7 +88,7 @@ To be documented once at least one baseline/alternative approach has been implem
 
 ## AI use and reflection
 
-AI assistance (Claude) has been used so far for: scaffolding the repository structure, drafting the initial data-loading/preprocessing/analysis utility functions and their docstrings, and configuring the testing and documentation tooling (pytest, pdoc). All generated code was reviewed and run locally (`pytest`, `pdoc`) before being committed. The choice of engineering question, dataset interpretation, and all analytical/methodological decisions remain the student's responsibility and will be detailed further in the final written report as the project develops.
+AI assistance (Claude) has been used so far for: scaffolding the repository structure, drafting the initial data-loading/preprocessing/analysis utility functions and their docstrings, and configuring the testing and documentation tooling (pytest, pdoc), and profiling the raw dataset (writing the DuckDB audit script and drafting `reports/data_audit_findings.md`). All audit figures come from running that script on the raw files and can be regenerated. All generated code was reviewed and run locally (`pytest`, `pdoc`) before being committed. The choice of engineering question, dataset interpretation, and all analytical/methodological decisions remain the student's responsibility and will be detailed further in the final written report as the project develops.
 
 ## License
 
