@@ -163,6 +163,52 @@ def test_occupied_share_converges_as_resolution_is_refined():
     assert share[-1] >= weighted[-1]
 
 
+def test_mean_headcount_is_time_weighted():
+    # 2 people for 3 min then 4 people for 2 min, inside one 10-min interval:
+    # (2 * 3 + 4 * 2) / 10 = 1.4 people on average.
+    events = make_events([
+        (1, "2024-05-01 09:00:00", "CurrentlyOccupied", 2),
+        (2, "2024-05-01 09:03:00", "CurrentlyOccupied", 4),
+        (3, "2024-05-01 09:05:00", "RecentlyOccupied", 0),
+    ])
+
+    table = events_to_intervals(events, resolution="10min")
+
+    assert table["mean_headcount"].iloc[0] == pytest.approx(1.4)
+    assert table["max_headcount"].iloc[0] == 4
+
+
+def test_person_time_is_the_same_at_every_resolution():
+    events = make_events([
+        (1, "2024-05-01 09:01:30", "CurrentlyOccupied", 3),
+        (2, "2024-05-01 09:04:00", "CurrentlyOccupied", 5),
+        (3, "2024-05-01 09:08:00", "CurrentlyOccupied", 1),
+        (4, "2024-05-01 09:41:00", "RecentlyOccupied", 0),
+        (5, "2024-05-01 09:58:00", "NotOccupied", 0),
+    ])
+    expected = (3 * 2.5 + 5 * 4 + 1 * 5) * 60  # person-seconds; last occupied report held 5 min
+
+    for res in ("1h", "30min", "10min", "5min", "2min"):
+        table = events_to_intervals(events, resolution=res)
+        person_seconds = (table["mean_headcount"] * pd.Timedelta(res).total_seconds()).sum()
+        assert person_seconds == pytest.approx(expected), res
+
+
+def test_capacity_caps_headcount_and_flags_interval():
+    events = make_events([
+        (1, "2024-05-01 09:00:00", "CurrentlyOccupied", 72),
+        (2, "2024-05-01 09:05:00", "CurrentlyOccupied", 3),
+        (3, "2024-05-01 09:10:00", "RecentlyOccupied", 0),
+    ])
+
+    table = events_to_intervals(events, resolution="5min", capacity=20)
+
+    assert list(table["max_headcount"]) == [20, 3, 0]
+    assert list(table["mean_headcount"]) == [20.0, 3.0, 0.0]
+    assert list(table["over_capacity"]) == [True, False, False]
+    assert "over_capacity" not in events_to_intervals(events, resolution="5min").columns
+
+
 def test_events_to_intervals_rejects_unsupported_resolution():
     events = make_events([(1, "2024-05-01 09:15:00", "CurrentlyOccupied", 1)])
 
@@ -275,8 +321,9 @@ def test_build_occupancy_table_reports_every_rule():
 
     table, log = build_occupancy_table(events)
 
-    assert set(log) == {"OCC-RANGE-01", "OCC-DUP-01", "OCC-DUP-02", "OCC-GAP-01", "OCC-NIGHT-01"}
+    assert set(log) == {"OCC-RANGE-01", "OCC-DUP-01", "OCC-DUP-02", "OCC-CAP-01", "OCC-GAP-01", "OCC-NIGHT-01"}
     assert log["OCC-DUP-01"] == 1
     assert list(table.columns) == [
-        "n_events", "max_headcount", "occupied_fraction", "occupied", "outage", "night_detection",
+        "n_events", "max_headcount", "mean_headcount", "occupied_fraction", "occupied", "over_capacity",
+        "outage", "night_detection",
     ]

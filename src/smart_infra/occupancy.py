@@ -39,6 +39,10 @@ DEFAULT_MAX_HOLD = "5min"
 """Longest time an event's status is assumed to hold without a new event.
 On G.20, 99.9% of gaps between consecutive occupied events are under 340 s."""
 
+DEFAULT_CAPACITY = 20
+"""Most people G.20 can physically hold: about 30 m2 (the student's estimate)
+at 1.5 m2 per person. Higher readings are treated as sensor errors."""
+
 EVENT_COLUMNS = ["id", "timestamp", "status", "headcount"]
 """Columns :func:`clean_events` expects, renamed from the raw export."""
 
@@ -120,6 +124,7 @@ def events_to_intervals(
     resolution: str = "1h",
     occupied_threshold: int = 1,
     max_hold: str = DEFAULT_MAX_HOLD,
+    capacity: int | None = None,
     start: pd.Timestamp | None = None,
     end: pd.Timestamp | None = None,
 ) -> pd.DataFrame:
@@ -139,6 +144,11 @@ def events_to_intervals(
         Smallest headcount that counts as occupied.
     max_hold : str, default "5min"
         Longest time (pandas timedelta string) an event's status is held.
+    capacity : int, optional
+        Most people the room can physically hold (rule ``OCC-CAP-01``).
+        Headcounts above it are treated as sensor errors: they are capped at
+        ``capacity`` and the interval is flagged in ``over_capacity``.
+        No cap if ``None``.
     start, end : pandas.Timestamp, optional
         Timezone-aware first and last interval to include. Default to the
         intervals of the first and last event.
@@ -151,11 +161,17 @@ def events_to_intervals(
 
         - ``n_events``: number of events in the interval (0 if none).
         - ``max_headcount``: highest headcount held at any time in the interval.
+        - ``mean_headcount``: time-weighted average headcount over the
+          interval (person-seconds per second), the quantity ventilation
+          depends on. Like ``occupied_fraction``, its mean over a period does
+          not depend on the resolution.
         - ``occupied_fraction``: share of the interval, 0 to 1, during which
           the room was occupied. Its mean over a period does not depend on the
           resolution.
         - ``occupied``: ``occupied_fraction > 0``, i.e. occupied at any time
           in the interval.
+        - ``over_capacity`` (only if ``capacity`` is given): the uncapped
+          headcount exceeded ``capacity`` at some time in the interval.
 
         Time with no event held is treated as empty. Use :func:`flag_outages`
         to mark intervals that are more likely sensor outages.
@@ -182,39 +198,60 @@ def events_to_intervals(
 
     # Hold each event's headcount until the next event, capped at max_hold.
     t = _to_ns(events["timestamp"])
-    headcount = events["headcount"].to_numpy()
+    raw_headcount = events["headcount"].to_numpy()
+    headcount = raw_headcount if capacity is None else np.minimum(raw_headcount, capacity)
     hold_end = np.minimum(np.append(t[1:], np.iinfo(np.int64).max), t + pd.Timedelta(max_hold).value)
-
-    # Occupied time before x is F(x) = sum of clip(x - spell start, 0, spell
-    # length) over occupied spells; spells don't overlap, so F can be read off
-    # a cumulative sum. Occupied time in [a, b) is then F(b) - F(a).
-    occupied = headcount >= occupied_threshold
-    spell_start, spell_len = t[occupied], (hold_end - t)[occupied]
-    cumulative = np.concatenate([[0], np.cumsum(spell_len)])
-
-    def occupied_before(x: np.ndarray) -> np.ndarray:
-        k = np.searchsorted(spell_start, x, side="right") - 1
-        kk = np.maximum(k, 0)
-        return np.where(k >= 0, cumulative[kk] + np.minimum(x - spell_start[kk], spell_len[kk]), 0)
+    spell_len = hold_end - t
 
     bounds = _to_ns(index)
-    if len(spell_start):
-        occupied_ns = occupied_before(bounds + step.value) - occupied_before(bounds)
-    else:
-        occupied_ns = np.zeros(len(bounds), dtype=np.int64)
+    occupied = headcount >= occupied_threshold
+    occupied_ns = _integrate(t[occupied], spell_len[occupied], np.ones(occupied.sum(), dtype=np.int64),
+                             bounds, step.value)
+    person_ns = _integrate(t, spell_len, headcount.astype(float), bounds, step.value)
 
     # Headcount held over from an event before the interval started.
     j = np.searchsorted(t, bounds, side="left") - 1
     jj = np.maximum(j, 0)
-    carried = np.where((j >= 0) & (bounds < hold_end[jj]), headcount[jj], 0)
+    held = (j >= 0) & (bounds < hold_end[jj])
 
-    table = events.groupby(interval)["headcount"].agg(n_events="size", max_headcount="max")
+    grouped = pd.DataFrame({"headcount": headcount, "raw": raw_headcount}, index=events.index).groupby(interval)
+    table = grouped.agg(n_events=("headcount", "size"), max_headcount=("headcount", "max"),
+                        raw_max=("raw", "max"))
     table = table.reindex(index, fill_value=0)
-    table["max_headcount"] = np.maximum(table["max_headcount"].to_numpy(), carried)
+    table["max_headcount"] = np.maximum(table["max_headcount"].to_numpy(), np.where(held, headcount[jj], 0))
+    table["mean_headcount"] = person_ns / step.value
     table["occupied_fraction"] = occupied_ns / step.value
     table["occupied"] = occupied_ns > 0
+    if capacity is not None:
+        raw_max = np.maximum(table["raw_max"].to_numpy(), np.where(held, raw_headcount[jj], 0))
+        table["over_capacity"] = raw_max > capacity
+    table = table.drop(columns="raw_max")
     table.index = index.tz_convert(LOCAL_TZ).rename("interval_start")
     return table
+
+
+def _integrate(starts: np.ndarray, lengths: np.ndarray, weights: np.ndarray,
+               bounds: np.ndarray, step: int) -> np.ndarray:
+    """Integrate a piecewise-constant signal over each interval ``[bound, bound + step)``.
+
+    The signal equals ``weights[i]`` on ``[starts[i], starts[i] + lengths[i])``
+    and 0 elsewhere; the pieces must be sorted and must not overlap. With
+    G(x) = integral of the signal up to x, the integral over [a, b) is
+    G(b) - G(a). G at any x is a cumulative sum up to the last piece starting
+    at or before x, plus the covered part of that piece, so every boundary is
+    evaluated with one binary search (O(log n)) instead of a scan.
+    """
+    if len(starts) == 0:
+        return np.zeros(len(bounds), dtype=weights.dtype)
+    cumulative = np.concatenate([[0], np.cumsum(lengths * weights)])
+
+    def integral_before(x: np.ndarray) -> np.ndarray:
+        k = np.searchsorted(starts, x, side="right") - 1
+        kk = np.maximum(k, 0)
+        partial = np.minimum(x - starts[kk], lengths[kk]) * weights[kk]
+        return np.where(k >= 0, cumulative[kk] + partial, 0)
+
+    return integral_before(bounds + step) - integral_before(bounds)
 
 
 def flag_outages(
@@ -308,6 +345,7 @@ def build_occupancy_table(
     resolution: str = "1h",
     occupied_threshold: int = 1,
     max_hold: str = DEFAULT_MAX_HOLD,
+    capacity: int | None = DEFAULT_CAPACITY,
     max_gap: str = "24h",
 ) -> tuple[pd.DataFrame, dict[str, int]]:
     """Run the full cleaning pipeline: clean, aggregate to intervals, flag.
@@ -322,23 +360,46 @@ def build_occupancy_table(
         Passed to :func:`events_to_intervals`.
     max_hold : str, default "5min"
         Passed to :func:`events_to_intervals`.
+    capacity : int or None, default 20
+        Passed to :func:`events_to_intervals`; ``None`` disables ``OCC-CAP-01``.
     max_gap : str, default "24h"
         Passed to :func:`flag_outages`.
 
     Returns
     -------
     table : pandas.DataFrame
-        Table with columns ``n_events``, ``max_headcount``,
-        ``occupied_fraction``, ``occupied``, ``outage`` and ``night_detection``.
+        Table with columns ``n_events``, ``max_headcount``, ``mean_headcount``,
+        ``occupied_fraction``, ``occupied``, ``over_capacity`` (if
+        ``capacity`` is set), ``outage`` and ``night_detection``.
     log : dict of str to int
         Rows removed per event rule (see :func:`clean_events`) plus intervals
-        flagged by ``OCC-GAP-01`` and ``OCC-NIGHT-01``.
+        flagged by ``OCC-CAP-01``, ``OCC-GAP-01`` and ``OCC-NIGHT-01``.
     """
     clean, log = clean_events(events)
     table = events_to_intervals(clean, resolution=resolution, occupied_threshold=occupied_threshold,
-                                max_hold=max_hold)
+                                max_hold=max_hold, capacity=capacity)
     table = flag_outages(table, clean, resolution=resolution, max_gap=max_gap)
     table = flag_night_detections(table)
+    log["OCC-CAP-01"] = int(table["over_capacity"].sum()) if capacity is not None else 0
     log["OCC-GAP-01"] = int(table["outage"].sum())
     log["OCC-NIGHT-01"] = int(table["night_detection"].sum())
     return table, log
+
+
+def read_table(path: str) -> pd.DataFrame:
+    """Read an occupancy table written by ``scripts/build_occupancy_tables.py``.
+
+    Parameters
+    ----------
+    path : str or Path
+        CSV with an ``interval_start`` column holding times with UTC offsets.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The table indexed by ``interval_start`` in Australia/Melbourne time.
+    """
+    table = pd.read_csv(path)
+    table.index = pd.DatetimeIndex(pd.to_datetime(table.pop("interval_start"), utc=True)).tz_convert(LOCAL_TZ)
+    table.index.name = "interval_start"
+    return table
