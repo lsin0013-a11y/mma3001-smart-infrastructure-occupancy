@@ -8,7 +8,7 @@ Individual project for **MMA3001: Numerical Methods and Machine Learning** (Mona
 |---|---|
 | 1. Raw-data audit ([`reports/data_audit_findings.md`](reports/data_audit_findings.md)) | Done |
 | 2. Problem definition (this README; draft report sections 1–2) | Done |
-| 3. Clean hourly occupied/empty table for room G.20 | In progress |
+| 3. Clean hourly occupied/empty table for room G.20 ([`reports/g20_hourly_summary.md`](reports/g20_hourly_summary.md)) | Done |
 | 4. Calendar features (teaching weeks, breaks, public holidays) | Planned |
 | 5. Baseline (hour-of-week profile) and models (logistic regression, tree-based) | Planned |
 | 6. Validation on withheld 2026 data, HVAC schedule comparison, sensitivity analysis | Planned |
@@ -55,12 +55,15 @@ Why this scope:
 ├── src/smart_infra/       # installable Python package (source code)
 │   ├── data_loader.py     # CSV loading + validation
 │   ├── preprocessing.py   # gap detection, missing-value handling
+│   ├── occupancy.py       # event stream -> clean hourly occupied/empty table
 │   └── analysis.py        # summary statistics, occupancy/environment merging
 ├── tests/                  # pytest test suite
 ├── scripts/
-│   └── profile_raw_data.py  # reproducible raw-data audit (DuckDB)
+│   ├── profile_raw_data.py        # reproducible raw-data audit (DuckDB)
+│   └── build_hourly_occupancy.py  # builds the hourly table for one room
 ├── reports/
 │   ├── data_audit_findings.md  # raw-data audit: coverage, errors, suitability
+│   ├── g20_hourly_summary.md   # cleaning counts per rule for the G.20 hourly table
 │   └── test_report.html   # generated pytest HTML test report
 ├── docs/                   # generated HTML API documentation (pdoc)
 ├── data/                   # not tracked in git — see data/README.md
@@ -88,6 +91,25 @@ python scripts/profile_raw_data.py
 ```
 
 This prints every figure quoted in [`reports/data_audit_findings.md`](reports/data_audit_findings.md). It reads the raw exports and never modifies them, and it caches parsed tables in `data/profile_cache.duckdb` (untracked).
+
+## Building the hourly occupancy table
+
+```bash
+python scripts/build_hourly_occupancy.py            # room G.20 by default
+```
+
+This reads G.20's ~1.9 million raw events and writes one row per hour to `data/processed/g20_hourly.csv` (untracked), with columns:
+
+| Column | Meaning |
+|---|---|
+| `hour_start` | start of the hour, Australia/Melbourne time with UTC offset |
+| `n_events` | raw events in the hour (0 = no detections) |
+| `max_headcount` | highest headcount in the hour |
+| `occupied` | **target**: `max_headcount >= 1` |
+| `outage` | hour lies inside a silence of more than 24 h covering weekday working hours, so it is more likely a sensor outage than an empty room (rule `OCC-GAP-01`); excluded from modelling |
+| `night_detection` | occupied hour between 01:00 and 05:00 (rule `OCC-NIGHT-01`); kept, but tested in the sensitivity analysis |
+
+It also writes [`reports/g20_hourly_summary.md`](reports/g20_hourly_summary.md) with the number of rows or hours affected by each cleaning rule and the outage periods found. `--threshold` and `--max-gap` change the occupancy threshold and outage rule for sensitivity analysis.
 
 ## Running the tests
 
