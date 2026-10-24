@@ -31,6 +31,8 @@ Only the **occupancy export**, filtered to room **G.20** (`floorspaceid` `cca1ac
 | `headcount` | people detected (≥ 1 only when `CurrentlyOccupied`) |
 | `collecteddate` | event time, with UTC offset (e.g. `2024-03-03 15:06:30+11`) |
 
+Calendar inputs (semester periods and public holidays) are in [`calendar/`](calendar/README.md) and are tracked in git.
+
 The environmental export was audited but is excluded from modelling; see [`reports/data_audit_findings.md`](../reports/data_audit_findings.md) §3 for why.
 
 ## Notes on data quality
