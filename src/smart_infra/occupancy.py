@@ -1,14 +1,15 @@
-"""Turn the raw occupancy event stream into a clean hourly occupied/empty table.
+"""Turn the raw occupancy event stream into a clean occupied/empty time series.
 
 The occupancy export is an event stream, not a regular time series: rows
 arrive about every 2 s while a space is occupied and none are written while
 it is empty (see ``reports/data_audit_findings.md`` §2). This module cleans
-those events and reduces them to one row per hour, which is the target series
-for the occupancy forecast.
+those events and reduces them to one row per fixed interval (10 min, 30 min or
+1 h; see :data:`RESOLUTIONS`), which is the target series for the occupancy
+forecast.
 
 Each cleaning rule carries the ID used in the audit's cleaning plan (§7).
-Suspect hours are flagged in their own column rather than deleted, so every
-rule can be switched off for sensitivity analysis.
+Suspect intervals are flagged in their own column rather than deleted, so
+every rule can be switched off for sensitivity analysis.
 """
 
 from __future__ import annotations
@@ -16,6 +17,10 @@ from __future__ import annotations
 import pandas as pd
 
 LOCAL_TZ = "Australia/Melbourne"
+
+RESOLUTIONS = ("10min", "30min", "1h")
+"""Supported interval lengths. Each divides an hour evenly, so intervals
+always line up with clock hours."""
 
 SPACE_IDS = {
     "G.20": "cca1ac3e-f81f-4ebb-aa2b-8b0bf3e9e53b",
@@ -56,7 +61,7 @@ def clean_events(events: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, int]]:
         If any of :data:`EVENT_COLUMNS` is missing.
     TypeError
         If ``timestamp`` is not timezone-aware. Naive times are rejected
-        because hours would be ambiguous across daylight-saving changes.
+        because intervals would be ambiguous across daylight-saving changes.
     """
     missing = [c for c in EVENT_COLUMNS if c not in events.columns]
     if missing:
@@ -82,70 +87,83 @@ def clean_events(events: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, int]]:
     return df.reset_index(drop=True), log
 
 
-def events_to_hourly(
+def _check_resolution(resolution: str) -> pd.Timedelta:
+    """Return ``resolution`` as a Timedelta, or raise if it is not supported."""
+    if resolution not in RESOLUTIONS:
+        raise ValueError(f"Unsupported resolution '{resolution}'. Use one of {RESOLUTIONS}.")
+    return pd.Timedelta(resolution)
+
+
+def events_to_intervals(
     events: pd.DataFrame,
+    resolution: str = "1h",
     occupied_threshold: int = 1,
     start: pd.Timestamp | None = None,
     end: pd.Timestamp | None = None,
 ) -> pd.DataFrame:
-    """Reduce cleaned events to one row per hour.
+    """Reduce cleaned events to one row per fixed interval.
 
     Parameters
     ----------
     events : pandas.DataFrame
         Output of :func:`clean_events`.
+    resolution : {"10min", "30min", "1h"}, default "1h"
+        Interval length.
     occupied_threshold : int, default 1
-        An hour is occupied if its maximum headcount is at least this value.
+        An interval is occupied if its maximum headcount is at least this value.
     start, end : pandas.Timestamp, optional
-        Timezone-aware first and last hour to include. Default to the hours of
-        the first and last event.
+        Timezone-aware first and last interval to include. Default to the
+        intervals of the first and last event.
 
     Returns
     -------
     pandas.DataFrame
-        Indexed by ``hour_start`` (hourly, Australia/Melbourne time, every hour
+        Indexed by ``interval_start`` (Australia/Melbourne time, every interval
         from ``start`` to ``end`` inclusive) with columns:
 
-        - ``n_events``: number of events in the hour (0 if none).
-        - ``max_headcount``: highest headcount in the hour (0 if none).
+        - ``n_events``: number of events in the interval (0 if none).
+        - ``max_headcount``: highest headcount in the interval (0 if none).
         - ``occupied``: ``max_headcount >= occupied_threshold``.
 
-        Hours with no events are treated as empty. Use :func:`flag_outages`
-        to mark those that are more likely sensor outages.
+        Intervals with no events are treated as empty. Use
+        :func:`flag_outages` to mark those that are more likely sensor outages.
 
     Raises
     ------
     ValueError
-        If ``events`` is empty or ``occupied_threshold`` is below 1.
+        If ``events`` is empty, ``resolution`` is not supported, or
+        ``occupied_threshold`` is below 1.
     """
+    _check_resolution(resolution)
     if events.empty:
         raise ValueError("No events to aggregate")
     if occupied_threshold < 1:
         raise ValueError("occupied_threshold must be at least 1")
 
-    # Melbourne's UTC offset is a whole number of hours, so UTC hour boundaries
-    # are also local hour boundaries. Working in UTC avoids the repeated hour
+    # Melbourne's UTC offset is a whole number of hours, so UTC interval
+    # boundaries are also local ones. Working in UTC avoids the repeated hour
     # when daylight saving ends.
-    hour = events["timestamp"].dt.tz_convert("UTC").dt.floor("h")
-    hourly = events.groupby(hour)["headcount"].agg(n_events="size", max_headcount="max")
+    interval = events["timestamp"].dt.tz_convert("UTC").dt.floor(resolution)
+    table = events.groupby(interval)["headcount"].agg(n_events="size", max_headcount="max")
 
-    first = hour.min() if start is None else start.tz_convert("UTC").floor("h")
-    last = hour.max() if end is None else end.tz_convert("UTC").floor("h")
-    index = pd.date_range(first, last, freq="h")
-    hourly = hourly.reindex(index, fill_value=0)
+    first = interval.min() if start is None else start.tz_convert("UTC").floor(resolution)
+    last = interval.max() if end is None else end.tz_convert("UTC").floor(resolution)
+    index = pd.date_range(first, last, freq=resolution)
+    table = table.reindex(index, fill_value=0)
 
-    hourly["occupied"] = hourly["max_headcount"] >= occupied_threshold
-    hourly.index = index.tz_convert(LOCAL_TZ).rename("hour_start")
-    return hourly
+    table["occupied"] = table["max_headcount"] >= occupied_threshold
+    table.index = index.tz_convert(LOCAL_TZ).rename("interval_start")
+    return table
 
 
 def flag_outages(
-    hourly: pd.DataFrame,
+    table: pd.DataFrame,
     events: pd.DataFrame,
+    resolution: str = "1h",
     max_gap: str = "24h",
     working_hours: tuple[int, int] = (9, 17),
 ) -> pd.DataFrame:
-    """Flag hours that fall in a likely sensor outage (rule ``OCC-GAP-01``).
+    """Flag intervals that fall in a likely sensor outage (rule ``OCC-GAP-01``).
 
     A gap between consecutive events is treated as a likely outage when it is
     longer than ``max_gap`` and covers at least one weekday working hour. A
@@ -156,10 +174,12 @@ def flag_outages(
 
     Parameters
     ----------
-    hourly : pandas.DataFrame
-        Output of :func:`events_to_hourly`.
+    table : pandas.DataFrame
+        Output of :func:`events_to_intervals`.
     events : pandas.DataFrame
-        The cleaned events ``hourly`` was built from.
+        The cleaned events ``table`` was built from.
+    resolution : {"10min", "30min", "1h"}, default "1h"
+        The resolution ``table`` was built with.
     max_gap : str, default "24h"
         Shortest gap (pandas timedelta string) that can count as an outage.
     working_hours : tuple of int, default (9, 17)
@@ -168,29 +188,35 @@ def flag_outages(
     Returns
     -------
     pandas.DataFrame
-        A copy of ``hourly`` with a boolean ``outage`` column. Only hours lying
-        entirely inside a flagged gap are marked, so they never contain events.
+        A copy of ``table`` with a boolean ``outage`` column. Only intervals
+        lying entirely inside a flagged gap are marked, so they never contain
+        events.
     """
-    hourly = hourly.copy()
-    hourly["outage"] = False
+    step = _check_resolution(resolution)
+    table = table.copy()
+    table["outage"] = False
 
-    idx = hourly.index
-    working = (idx.dayofweek < 5) & (idx.hour >= working_hours[0]) & (idx.hour < working_hours[1])
-
+    idx = table.index
     t = events["timestamp"].sort_values()
     gaps = t.diff()
     long_gaps = gaps > pd.Timedelta(max_gap)
     for gap_end, gap in zip(t[long_gaps], gaps[long_gaps]):
-        # Strictly after the gap's first event, so that event's own hour is excluded.
-        inside = (idx > gap_end - gap) & (idx + pd.Timedelta("1h") <= gap_end)
-        if (inside & working).any():
-            hourly.loc[inside, "outage"] = True
+        gap_start = gap_end - gap
+        # Decide from the silence itself, minute by minute, so the decision is
+        # the same at every resolution.
+        minutes = pd.date_range(gap_start.ceil("min"), gap_end, freq="min", inclusive="left").tz_convert(LOCAL_TZ)
+        covers_working = ((minutes.dayofweek < 5) & (minutes.hour >= working_hours[0])
+                          & (minutes.hour < working_hours[1])).any()
+        if covers_working:
+            # Strictly after the gap's first event, so that event's own interval is excluded.
+            inside = (idx > gap_start) & (idx + step <= gap_end)
+            table.loc[inside, "outage"] = True
 
-    return hourly
+    return table
 
 
-def flag_night_detections(hourly: pd.DataFrame, night_hours: tuple[int, int] = (1, 5)) -> pd.DataFrame:
-    """Flag occupied hours in the middle of the night (rule ``OCC-NIGHT-01``).
+def flag_night_detections(table: pd.DataFrame, night_hours: tuple[int, int] = (1, 5)) -> pd.DataFrame:
+    """Flag occupied intervals in the middle of the night (rule ``OCC-NIGHT-01``).
 
     The audit found detections between 01:00 and 05:00 on many nights. They
     may be false detections or genuine late-night use, so they are flagged for
@@ -198,51 +224,54 @@ def flag_night_detections(hourly: pd.DataFrame, night_hours: tuple[int, int] = (
 
     Parameters
     ----------
-    hourly : pandas.DataFrame
-        Output of :func:`events_to_hourly` (or :func:`flag_outages`).
+    table : pandas.DataFrame
+        Output of :func:`events_to_intervals` (or :func:`flag_outages`).
     night_hours : tuple of int, default (1, 5)
         Local start (inclusive) and end (exclusive) hour of the night window.
 
     Returns
     -------
     pandas.DataFrame
-        A copy of ``hourly`` with a boolean ``night_detection`` column.
+        A copy of ``table`` with a boolean ``night_detection`` column.
     """
-    hourly = hourly.copy()
-    hour = hourly.index.hour
-    hourly["night_detection"] = hourly["occupied"] & (hour >= night_hours[0]) & (hour < night_hours[1])
-    return hourly
+    table = table.copy()
+    hour = table.index.hour
+    table["night_detection"] = table["occupied"] & (hour >= night_hours[0]) & (hour < night_hours[1])
+    return table
 
 
-def build_hourly_table(
+def build_occupancy_table(
     events: pd.DataFrame,
+    resolution: str = "1h",
     occupied_threshold: int = 1,
     max_gap: str = "24h",
 ) -> tuple[pd.DataFrame, dict[str, int]]:
-    """Run the full cleaning pipeline: clean, aggregate to hours, flag.
+    """Run the full cleaning pipeline: clean, aggregate to intervals, flag.
 
     Parameters
     ----------
     events : pandas.DataFrame
         Raw events for one space, as accepted by :func:`clean_events`.
+    resolution : {"10min", "30min", "1h"}, default "1h"
+        Interval length, passed to :func:`events_to_intervals`.
     occupied_threshold : int, default 1
-        Passed to :func:`events_to_hourly`.
+        Passed to :func:`events_to_intervals`.
     max_gap : str, default "24h"
         Passed to :func:`flag_outages`.
 
     Returns
     -------
-    hourly : pandas.DataFrame
-        Hourly table with columns ``n_events``, ``max_headcount``,
-        ``occupied``, ``outage`` and ``night_detection``.
+    table : pandas.DataFrame
+        Table with columns ``n_events``, ``max_headcount``, ``occupied``,
+        ``outage`` and ``night_detection``.
     log : dict of str to int
-        Rows removed per event rule (see :func:`clean_events`) plus hours
+        Rows removed per event rule (see :func:`clean_events`) plus intervals
         flagged by ``OCC-GAP-01`` and ``OCC-NIGHT-01``.
     """
     clean, log = clean_events(events)
-    hourly = events_to_hourly(clean, occupied_threshold=occupied_threshold)
-    hourly = flag_outages(hourly, clean, max_gap=max_gap)
-    hourly = flag_night_detections(hourly)
-    log["OCC-GAP-01"] = int(hourly["outage"].sum())
-    log["OCC-NIGHT-01"] = int(hourly["night_detection"].sum())
-    return hourly, log
+    table = events_to_intervals(clean, resolution=resolution, occupied_threshold=occupied_threshold)
+    table = flag_outages(table, clean, resolution=resolution, max_gap=max_gap)
+    table = flag_night_detections(table)
+    log["OCC-GAP-01"] = int(table["outage"].sum())
+    log["OCC-NIGHT-01"] = int(table["night_detection"].sum())
+    return table, log

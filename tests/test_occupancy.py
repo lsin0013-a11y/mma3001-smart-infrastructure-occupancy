@@ -4,9 +4,9 @@ import pandas as pd
 import pytest
 
 from smart_infra.occupancy import (
-    build_hourly_table,
+    build_occupancy_table,
     clean_events,
-    events_to_hourly,
+    events_to_intervals,
     flag_night_detections,
     flag_outages,
 )
@@ -71,30 +71,62 @@ def test_clean_events_rejects_missing_columns():
         clean_events(pd.DataFrame({"id": [1]}))
 
 
-def test_events_to_hourly_fills_empty_hours():
+def test_events_to_intervals_fills_empty_hours_at_1h():
     events = make_events([
         (1, "2024-05-01 09:15:00", "CurrentlyOccupied", 2),
         (2, "2024-05-01 09:15:02", "CurrentlyOccupied", 3),
         (3, "2024-05-01 11:30:00", "RecentlyOccupied", 0),
     ])
 
-    hourly = events_to_hourly(events)
+    table = events_to_intervals(events)
 
-    assert list(hourly.index.hour) == [9, 10, 11]
-    assert list(hourly["n_events"]) == [2, 0, 1]
-    assert list(hourly["max_headcount"]) == [3, 0, 0]
-    assert list(hourly["occupied"]) == [True, False, False]
+    assert list(table.index.hour) == [9, 10, 11]
+    assert list(table["n_events"]) == [2, 0, 1]
+    assert list(table["max_headcount"]) == [3, 0, 0]
+    assert list(table["occupied"]) == [True, False, False]
 
 
-def test_events_to_hourly_applies_threshold():
+def test_events_to_intervals_at_10min_splits_the_hour():
+    events = make_events([
+        (1, "2024-05-01 09:05:00", "CurrentlyOccupied", 2),
+        (2, "2024-05-01 09:45:00", "CurrentlyOccupied", 1),
+    ])
+
+    table = events_to_intervals(events, resolution="10min")
+
+    assert list(table.index.minute) == [0, 10, 20, 30, 40]
+    assert list(table["occupied"]) == [True, False, False, False, True]
+
+
+def test_events_to_intervals_same_events_at_each_resolution():
+    # One short visit: the whole hour is occupied at 1h, but only 1 of 2
+    # half-hours and 1 of 6 ten-minute intervals.
+    events = make_events([
+        (1, "2024-05-01 09:05:00", "CurrentlyOccupied", 1),
+        (2, "2024-05-01 09:55:00", "RecentlyOccupied", 0),
+    ])
+
+    shares = {r: events_to_intervals(events, resolution=r)["occupied"].mean() for r in ("1h", "30min", "10min")}
+
+    assert shares == {"1h": 1.0, "30min": 0.5, "10min": pytest.approx(1 / 6)}
+
+
+def test_events_to_intervals_rejects_unsupported_resolution():
     events = make_events([(1, "2024-05-01 09:15:00", "CurrentlyOccupied", 1)])
 
-    assert not events_to_hourly(events, occupied_threshold=2)["occupied"].iloc[0]
     with pytest.raises(ValueError):
-        events_to_hourly(events, occupied_threshold=0)
+        events_to_intervals(events, resolution="15min")
 
 
-def test_events_to_hourly_keeps_repeated_hour_when_daylight_saving_ends():
+def test_events_to_intervals_applies_threshold():
+    events = make_events([(1, "2024-05-01 09:15:00", "CurrentlyOccupied", 1)])
+
+    assert not events_to_intervals(events, occupied_threshold=2)["occupied"].iloc[0]
+    with pytest.raises(ValueError):
+        events_to_intervals(events, occupied_threshold=0)
+
+
+def test_events_to_intervals_keeps_repeated_hour_when_daylight_saving_ends():
     # Clocks go back from 03:00 AEDT to 02:00 AEST on 7 April 2024, so local
     # 02:00-03:00 happens twice and the day has 25 hours.
     events = pd.DataFrame({
@@ -104,16 +136,16 @@ def test_events_to_hourly_keeps_repeated_hour_when_daylight_saving_ends():
         "headcount": [1, 1],
     })
 
-    hourly = events_to_hourly(events)
+    table = events_to_intervals(events)
 
-    assert len(hourly) == 25
-    assert hourly.index.is_unique
-    assert list(hourly.index.hour).count(2) == 2
+    assert len(table) == 25
+    assert table.index.is_unique
+    assert list(table.index.hour).count(2) == 2
 
 
-def test_events_to_hourly_rejects_empty_input():
+def test_events_to_intervals_rejects_empty_input():
     with pytest.raises(ValueError):
-        events_to_hourly(make_events([]))
+        events_to_intervals(make_events([]))
 
 
 def test_flag_outages_flags_long_weekday_gap():
@@ -122,10 +154,34 @@ def test_flag_outages_flags_long_weekday_gap():
         (1, "2024-05-07 18:00:00", "CurrentlyOccupied", 1),
         (2, "2024-05-09 08:00:00", "CurrentlyOccupied", 1),
     ])
-    hourly = flag_outages(events_to_hourly(events), events)
+    table = flag_outages(events_to_intervals(events), events)
 
-    assert hourly["outage"].sum() == 37  # 19:00 Tue to 07:00 Thu
-    assert not hourly["outage"].iloc[0] and not hourly["outage"].iloc[-1]
+    assert table["outage"].sum() == 37  # 19:00 Tue to 07:00 Thu
+    assert not table["outage"].iloc[0] and not table["outage"].iloc[-1]
+
+
+def test_flag_outages_at_30min_excludes_event_intervals():
+    events = make_events([
+        (1, "2024-05-07 18:00:00", "CurrentlyOccupied", 1),
+        (2, "2024-05-09 08:00:00", "CurrentlyOccupied", 1),
+    ])
+    table = flag_outages(events_to_intervals(events, resolution="30min"), events, resolution="30min")
+
+    assert table["outage"].sum() == 75  # 18:30 Tue to 07:30 Thu: 11 + 48 + 16
+    assert not table["outage"].iloc[0] and not table["outage"].iloc[-1]
+
+
+@pytest.mark.parametrize("resolution", ["10min", "30min", "1h"])
+def test_flag_outages_decision_does_not_depend_on_resolution(resolution):
+    # Friday 16:10 to Saturday 22:00 covers only 50 min of working time, all
+    # inside the hour of the first event. It must still be flagged at 1h.
+    events = make_events([
+        (1, "2024-05-10 16:10:00", "CurrentlyOccupied", 1),
+        (2, "2024-05-11 22:00:00", "CurrentlyOccupied", 1),
+    ])
+    table = flag_outages(events_to_intervals(events, resolution=resolution), events, resolution=resolution)
+
+    assert table["outage"].any()
 
 
 def test_flag_outages_ignores_weekend_gap():
@@ -135,7 +191,7 @@ def test_flag_outages_ignores_weekend_gap():
         (2, "2024-05-12 20:00:00", "CurrentlyOccupied", 1),
     ])
 
-    assert not flag_outages(events_to_hourly(events), events)["outage"].any()
+    assert not flag_outages(events_to_intervals(events), events)["outage"].any()
 
 
 def test_flag_outages_ignores_short_gap():
@@ -144,7 +200,7 @@ def test_flag_outages_ignores_short_gap():
         (2, "2024-05-07 18:00:00", "CurrentlyOccupied", 1),
     ])
 
-    assert not flag_outages(events_to_hourly(events), events)["outage"].any()
+    assert not flag_outages(events_to_intervals(events), events)["outage"].any()
 
 
 def test_flag_night_detections_marks_only_occupied_night_hours():
@@ -153,20 +209,20 @@ def test_flag_night_detections_marks_only_occupied_night_hours():
         (2, "2024-05-01 03:10:00", "RecentlyOccupied", 0),
         (3, "2024-05-01 10:10:00", "CurrentlyOccupied", 1),
     ])
-    hourly = flag_night_detections(events_to_hourly(events))
+    table = flag_night_detections(events_to_intervals(events))
 
-    assert list(hourly.index[hourly["night_detection"]].hour) == [2]
+    assert list(table.index[table["night_detection"]].hour) == [2]
 
 
-def test_build_hourly_table_reports_every_rule():
+def test_build_occupancy_table_reports_every_rule():
     events = make_events([
         (1, "2024-05-01 10:00:00", "CurrentlyOccupied", 1),
         (2, "2024-05-01 10:00:00", "CurrentlyOccupied", 1),
         (3, "2024-05-01 12:00:00", "CurrentlyOccupied", 2),
     ])
 
-    hourly, log = build_hourly_table(events)
+    table, log = build_occupancy_table(events)
 
     assert set(log) == {"OCC-RANGE-01", "OCC-DUP-01", "OCC-DUP-02", "OCC-GAP-01", "OCC-NIGHT-01"}
     assert log["OCC-DUP-01"] == 1
-    assert list(hourly.columns) == ["n_events", "max_headcount", "occupied", "outage", "night_detection"]
+    assert list(table.columns) == ["n_events", "max_headcount", "occupied", "outage", "night_detection"]
