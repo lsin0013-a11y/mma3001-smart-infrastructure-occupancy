@@ -61,10 +61,13 @@ Why this scope:
 ├── tests/                  # pytest test suite
 ├── scripts/
 │   ├── profile_raw_data.py        # reproducible raw-data audit (DuckDB)
+│   ├── resolution_convergence.py  # resolution convergence study + figure
 │   └── build_occupancy_tables.py  # builds the occupancy tables for one room
 ├── reports/
 │   ├── data_audit_findings.md  # raw-data audit: coverage, errors, suitability
 │   ├── g20_occupancy_summary.md  # G.20 tables: coverage and cleaning counts per resolution
+│   ├── resolution_convergence.csv  # convergence study results
+│   ├── figures/                # figures used in the README and report
 │   └── test_report.html   # generated pytest HTML test report
 ├── docs/                   # generated HTML API documentation (pdoc)
 ├── data/                   # not tracked in git — see data/README.md
@@ -122,6 +125,10 @@ It also writes [`reports/g20_occupancy_summary.md`](reports/g20_occupancy_summar
 |---|---|---|---|---|---|
 | Intervals occupied | 55.7% | 48.7% | 40.8% | 37.1% | 33.7% |
 | Overstatement vs 29.4% of time | +26.3 | +19.3 | +11.3 | +7.7 | +4.3 |
+
+![Resolution convergence](reports/figures/resolution_convergence.png)
+
+`python scripts/resolution_convergence.py` reproduces the study down to 10 s, including the first labelling method tried (an interval is occupied only if a report lands in it). That method does **not** converge: it falls through the true value between 5 and 2 min and reaches 13.4% at 10 s. Results are in [`reports/resolution_convergence.csv`](reports/resolution_convergence.csv).
 
 This is part of the optimisation work (the brief's "input resolution"). Finer intervals describe use more accurately and suit ventilation control. Heating and cooling, however, need 30–60 min to condition a room, and calendar inputs can't predict the exact minutes someone arrives.
 

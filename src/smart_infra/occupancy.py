@@ -25,8 +25,9 @@ import pandas as pd
 LOCAL_TZ = "Australia/Melbourne"
 
 RESOLUTIONS = ("2min", "5min", "10min", "30min", "1h")
-"""Supported interval lengths. Each divides an hour evenly, so intervals
-always line up with clock hours."""
+"""Interval lengths the tables are built at. Any length that divides an hour
+evenly is accepted (so intervals line up with clock hours); finer ones are used
+only in the resolution convergence study."""
 
 SPACE_IDS = {
     "G.20": "cca1ac3e-f81f-4ebb-aa2b-8b0bf3e9e53b",
@@ -98,10 +99,14 @@ def clean_events(events: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, int]]:
 
 
 def _check_resolution(resolution: str) -> pd.Timedelta:
-    """Return ``resolution`` as a Timedelta, or raise if it is not supported."""
-    if resolution not in RESOLUTIONS:
-        raise ValueError(f"Unsupported resolution '{resolution}'. Use one of {RESOLUTIONS}.")
-    return pd.Timedelta(resolution)
+    """Return ``resolution`` as a Timedelta, or raise if it doesn't divide an hour evenly."""
+    try:
+        step = pd.Timedelta(resolution)
+    except ValueError:
+        raise ValueError(f"Unparseable resolution '{resolution}'") from None
+    if step <= pd.Timedelta(0) or pd.Timedelta("1h") % step != pd.Timedelta(0):
+        raise ValueError(f"Resolution '{resolution}' must divide one hour evenly, e.g. {RESOLUTIONS}")
+    return step
 
 
 def _to_ns(timestamps: pd.Series | pd.DatetimeIndex) -> np.ndarray:
@@ -128,8 +133,8 @@ def events_to_intervals(
     ----------
     events : pandas.DataFrame
         Output of :func:`clean_events`.
-    resolution : {"2min", "5min", "10min", "30min", "1h"}, default "1h"
-        Interval length.
+    resolution : str, default "1h"
+        Interval length; must divide one hour evenly (see :data:`RESOLUTIONS`).
     occupied_threshold : int, default 1
         Smallest headcount that counts as occupied.
     max_hold : str, default "5min"
@@ -234,7 +239,7 @@ def flag_outages(
         Output of :func:`events_to_intervals`.
     events : pandas.DataFrame
         The cleaned events ``table`` was built from.
-    resolution : {"2min", "5min", "10min", "30min", "1h"}, default "1h"
+    resolution : str, default "1h"
         The resolution ``table`` was built with.
     max_gap : str, default "24h"
         Shortest gap (pandas timedelta string) that can count as an outage.
@@ -311,7 +316,7 @@ def build_occupancy_table(
     ----------
     events : pandas.DataFrame
         Raw events for one space, as accepted by :func:`clean_events`.
-    resolution : {"2min", "5min", "10min", "30min", "1h"}, default "1h"
+    resolution : str, default "1h"
         Interval length, passed to :func:`events_to_intervals`.
     occupied_threshold : int, default 1
         Passed to :func:`events_to_intervals`.

@@ -167,7 +167,7 @@ def test_events_to_intervals_rejects_unsupported_resolution():
     events = make_events([(1, "2024-05-01 09:15:00", "CurrentlyOccupied", 1)])
 
     with pytest.raises(ValueError):
-        events_to_intervals(events, resolution="15min")
+        events_to_intervals(events, resolution="7min")
 
 
 def test_events_to_intervals_applies_threshold():
