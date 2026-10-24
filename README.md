@@ -1,18 +1,52 @@
-# MMA3001 Project — Monash Smart Infrastructure
+# Forecasting Hourly Room Occupancy for Demand-Based HVAC Scheduling
 
 Individual project for **MMA3001: Numerical Methods and Machine Learning** (Monash University), using **Dataset 2: Monash Smart Infrastructure Occupancy and Environmental Data**.
 
 ## Status
 
-🚧 **Scaffold stage.** The repository structure, tooling, and generic data-handling utilities are in place. The specific engineering question (see brief below) and the corresponding numerical/ML method are being defined and will be implemented on top of this scaffold as the project progresses.
+| Step | State |
+|---|---|
+| 1. Raw-data audit ([`reports/data_audit_findings.md`](reports/data_audit_findings.md)) | Done |
+| 2. Problem definition (this README; draft report sections 1–2) | Done |
+| 3. Clean hourly occupied/empty table for room G.20 | In progress |
+| 4. Calendar features (teaching weeks, breaks, public holidays) | Planned |
+| 5. Baseline (hour-of-week profile) and models (logistic regression, tree-based) | Planned |
+| 6. Validation on withheld 2026 data, HVAC schedule comparison, sensitivity analysis | Planned |
 
 ## Engineering problem
 
-The dataset provides time-stamped building occupancy readings and environmental sensor measurements (CO2, PM1/PM2.5/PM10, temperature, humidity, pressure) collected across rooms/zones at Monash Smart Infrastructure between May and December 2024. The general problem, per the project brief, is:
+HVAC (heating, ventilation and air-conditioning) is one of the largest energy uses in university buildings, and most systems run on fixed timetables (for example Monday–Friday, 07:00–19:00) whether or not rooms are in use. Conditioning an empty room wastes energy; switching off while a room is in use leaves occupants uncomfortable. If the building management system knew in advance when a room would be occupied, it could pre-heat or pre-cool only when needed.
 
-> Develop a computational method that uses time-stamped building sensor data to understand, estimate or predict occupancy and environmental behaviour.
+**Problem: predict whether room G.20 (Building 60, Monash Clayton) will be occupied in each hour, from calendar information alone, so its HVAC can be scheduled on demand instead of on a fixed timetable.**
 
-**Selected direction: predicting room occupancy.** A raw-data audit ([`reports/data_audit_findings.md`](reports/data_audit_findings.md)) found the occupancy data strong: 9.1 M headcount events across 5 spaces from Nov 2023 to Apr 2026, about 2 s resolution while a space is occupied. The environmental data can't support estimating occupancy from in-room readings: 3 of the 5 env sensors are frozen, the 2 live ones are live in windows that don't overlap, and no env sensor can be placed in the same room as an occupancy space. The working framing is therefore to **forecast each space's hourly headcount / probability of being occupied from past occupancy, calendar and weather features**, with the hour-of-week average profile as the baseline. The exact scope will be confirmed once the sensor-to-room mapping has been checked with the teaching team.
+Why this scope:
+
+- **G.20 is one of only two occupancy spaces the metadata maps to a real room**, has about two years of data (March 2024 – April 2026), and is the busiest space in the dataset. Room G.25 may be used at the end to test whether the method generalises.
+- **Occupancy data only.** The raw-data audit found the environmental data can't support this problem: 51% of it comes from frozen sensors, the two live sensors are live in windows that don't overlap, and no environmental sensor can be placed in G.20.
+- **Hourly, yes/no.** Hourly resolution matches HVAC scheduling decisions, and a binary output is simpler to model, validate and explain than headcount.
+
+### Inputs and outputs
+
+| | Item | Format / domain |
+|---|---|---|
+| Input | Hour of day | integer, 0–23 (Australia/Melbourne local time) |
+| Input | Day of week | Monday–Sunday |
+| Input | Teaching period | teaching week / exam period / break (Monash academic calendar) |
+| Input | Public holiday | true / false (Victorian public holidays) |
+| Input (optional) | Occupied in the same hour last week | true / false |
+| Output | Occupancy probability | 0–1 per hour |
+| Output | Occupancy prediction | true / false per hour, used as the HVAC on/off schedule |
+| Output | Schedule comparison | hours conditioned while empty, and occupied hours missed, compared with a fixed schedule |
+
+**Ground truth:** an hour is *occupied* if G.20's headcount is 1 or more at any time in that hour.
+
+### Limitations of the scope
+
+- One room; hourly resolution; binary output.
+- Calendar inputs only, so the model can't anticipate one-off events or timetable changes.
+- An empty room and a sensor outage both produce no data. Long weekday silences are flagged as likely outages, but some missing data will unavoidably be labelled as empty.
+- Savings are estimated in hours of conditioning, not kWh: the dataset has no HVAC capacity, room volume or ventilation data.
+- The sensor-to-room mapping comes from a metadata sheet marked "To be confirmed" by the data provider.
 
 ## Repository structure
 
@@ -45,12 +79,11 @@ pip install -r requirements.txt
 pip install -e .                 # install smart_infra as an editable package
 ```
 
-Place the raw dataset locally per `data/README.md` (the raw files are large and are not committed to this repository).
+Place the raw dataset locally per [`data/README.md`](data/README.md) (the raw files are large and are not committed to this repository).
 
 ## Auditing the raw data
 
 ```bash
-pip install duckdb openpyxl
 python scripts/profile_raw_data.py
 ```
 
@@ -62,7 +95,7 @@ This prints every figure quoted in [`reports/data_audit_findings.md`](reports/da
 pytest --html=reports/test_report.html --self-contained-html
 ```
 
-The current suite (16 tests) covers data loading/validation, missing-data handling and gap detection, and the summary/merge analysis utilities, using small synthetic fixtures rather than the full raw dataset. The generated report is at `reports/test_report.html`.
+The tests use small synthetic datasets rather than the raw data, so they run without the dataset. The generated report is at `reports/test_report.html`.
 
 ## Building the documentation
 
@@ -74,21 +107,23 @@ pdoc smart_infra --output-dir docs -d numpy
 
 Open `docs/smart_infra.html` in a browser to view it.
 
-## Computational approach
+## Computational approach (planned)
 
-To be documented once the specific method is selected. This section will explain how the method works, why it was chosen, its assumptions and parameters, how it was implemented, and its known limitations, per the project brief.
+1. **Pre-processing:** reduce G.20's ~2-second event stream to one row per hour (occupied or not), flagging likely sensor outages rather than treating them as empty.
+2. **Baseline:** hour-of-week profile, i.e. for each of the 168 hours of the week, the fraction of training weeks in which the room was occupied.
+3. **Main model:** logistic regression on calendar features; chosen because it gives probabilities, interpretable coefficients and fast training.
+4. **Alternative:** a decision tree or random forest, to test whether capturing interactions (e.g. Friday afternoons in exam periods) is worth the extra complexity.
 
-## Validation
+## Validation (planned)
 
-To be documented once the specific method is selected. Validation will follow the project brief's requirements: a justified method (e.g. withheld test data, cross-validation, comparison against a baseline), clear metrics/acceptance criteria, and an honest account of what the validation does and does not establish.
-
-## Alternative solutions / baseline comparison
-
-To be documented once at least one baseline/alternative approach has been implemented and compared against the final approach.
+- **Chronological split:** train on 2024–2025, test on 2026 data the models never see. A random split would leak future information.
+- **Metrics:** accuracy, F1 score for the occupied class, Brier score for probability quality.
+- **Engineering evaluation:** compare a fixed Monday–Friday 07:00–19:00 schedule with the prediction-driven schedule, counting hours conditioned while empty and occupied hours missed.
+- **Sensitivity analysis:** the occupancy threshold, the gap length treated as an outage, and including or excluding night-time detections.
 
 ## AI use and reflection
 
-AI assistance (Claude) has been used so far for: scaffolding the repository structure, drafting the initial data-loading/preprocessing/analysis utility functions and their docstrings, and configuring the testing and documentation tooling (pytest, pdoc), and profiling the raw dataset (writing the DuckDB audit script and drafting `reports/data_audit_findings.md`). All audit figures come from running that script on the raw files and can be regenerated. All generated code was reviewed and run locally (`pytest`, `pdoc`) before being committed. The choice of engineering question, dataset interpretation, and all analytical/methodological decisions remain the student's responsibility and will be detailed further in the final written report as the project develops.
+AI assistance (Claude) has been used for: scaffolding the repository structure; drafting the initial data-loading/preprocessing/analysis utility functions and their docstrings; configuring the testing and documentation tooling (pytest, pdoc); profiling the raw dataset (writing the DuckDB audit script and drafting `reports/data_audit_findings.md`); proposing the problem framing; and drafting this README. All audit figures come from running that script on the raw files and can be regenerated. All generated code was reviewed and run locally (`pytest`, `pdoc`) before being committed. The choice of engineering problem, dataset interpretation and all analytical decisions remain the student's responsibility and will be detailed in the written report.
 
 ## License
 

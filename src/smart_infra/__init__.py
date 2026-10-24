@@ -5,9 +5,10 @@ analysing time-stamped building sensor data (occupancy counts and
 environmental measurements such as CO2, PM2.5/PM10, temperature and
 humidity) collected from Monash Smart Infrastructure.
 
-The specific engineering question (e.g. occupancy prediction, missing-data
-reconstruction, anomaly detection) is implemented on top of these utilities
-as the project develops; see the project README for current scope.
+The project uses them to forecast whether room G.20 will be occupied in each
+hour from calendar information, so that its HVAC can be scheduled on demand
+rather than on a fixed timetable. See the project README for the full problem
+definition, inputs, outputs and current status.
 """
 
 __version__ = "0.1.0"
