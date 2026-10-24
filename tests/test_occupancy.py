@@ -111,6 +111,58 @@ def test_events_to_intervals_same_events_at_each_resolution():
     assert shares == {"1h": 1.0, "30min": 0.5, "10min": pytest.approx(1 / 6)}
 
 
+def test_events_to_intervals_holds_state_between_sparse_events():
+    # Reports 5 min apart: the 09:02 interval has no event of its own but the
+    # room is still occupied, with the headcount carried over.
+    events = make_events([
+        (1, "2024-05-01 09:00:00", "CurrentlyOccupied", 2),
+        (2, "2024-05-01 09:05:00", "CurrentlyOccupied", 2),
+        (3, "2024-05-01 09:06:00", "RecentlyOccupied", 0),
+    ])
+
+    table = events_to_intervals(events, resolution="2min")
+
+    assert list(table["n_events"]) == [1, 0, 1, 1]
+    assert list(table["occupied"]) == [True, True, True, False]
+    assert list(table["max_headcount"]) == [2, 2, 2, 0]
+    assert list(table["occupied_fraction"]) == [1.0, 1.0, 1.0, 0.0]
+
+
+def test_events_to_intervals_stops_holding_after_max_hold():
+    # A lone occupied report followed by 20 min of silence counts as occupied
+    # for max_hold (5 min) only.
+    events = make_events([
+        (1, "2024-05-01 09:00:00", "CurrentlyOccupied", 1),
+        (2, "2024-05-01 09:20:00", "RecentlyOccupied", 0),
+    ])
+
+    table = events_to_intervals(events, resolution="5min")
+
+    assert list(table["occupied"]) == [True, False, False, False, False]
+    assert table["occupied_fraction"].iloc[0] == 1.0
+
+
+def test_occupied_share_converges_as_resolution_is_refined():
+    # Two visits within one hour. The share of intervals marked occupied must
+    # fall (or stay level) as intervals shrink, and never drop below the
+    # time-weighted share, which is the same at every resolution.
+    events = make_events([
+        (1, "2024-05-01 09:01:00", "CurrentlyOccupied", 1),
+        (2, "2024-05-01 09:04:00", "RecentlyOccupied", 0),
+        (3, "2024-05-01 09:33:00", "CurrentlyOccupied", 1),
+        (4, "2024-05-01 09:36:00", "CurrentlyOccupied", 1),
+        (5, "2024-05-01 09:41:00", "RecentlyOccupied", 0),
+        (6, "2024-05-01 09:58:00", "NotOccupied", 0),
+    ])
+    tables = {r: events_to_intervals(events, resolution=r) for r in ("1h", "30min", "10min", "5min", "2min")}
+    share = [t["occupied"].mean() for t in tables.values()]
+    weighted = [t["occupied_fraction"].mean() for t in tables.values()]
+
+    assert share == sorted(share, reverse=True)
+    assert all(w == pytest.approx(11 / 60) for w in weighted)  # 3 + 8 occupied minutes
+    assert share[-1] >= weighted[-1]
+
+
 def test_events_to_intervals_rejects_unsupported_resolution():
     events = make_events([(1, "2024-05-01 09:15:00", "CurrentlyOccupied", 1)])
 
@@ -225,4 +277,6 @@ def test_build_occupancy_table_reports_every_rule():
 
     assert set(log) == {"OCC-RANGE-01", "OCC-DUP-01", "OCC-DUP-02", "OCC-GAP-01", "OCC-NIGHT-01"}
     assert log["OCC-DUP-01"] == 1
-    assert list(table.columns) == ["n_events", "max_headcount", "occupied", "outage", "night_detection"]
+    assert list(table.columns) == [
+        "n_events", "max_headcount", "occupied_fraction", "occupied", "outage", "night_detection",
+    ]

@@ -3,9 +3,14 @@
 The occupancy export is an event stream, not a regular time series: rows
 arrive about every 2 s while a space is occupied and none are written while
 it is empty (see ``reports/data_audit_findings.md`` §2). This module cleans
-those events and reduces them to one row per fixed interval (10 min, 30 min or
-1 h; see :data:`RESOLUTIONS`), which is the target series for the occupancy
-forecast.
+those events and reduces them to one row per fixed interval (2 min to 1 h; see
+:data:`RESOLUTIONS`), which is the target series for the occupancy forecast.
+
+Occupancy is treated as a *state*: each event's status holds until the next
+event, for at most ``max_hold``. Counting only the instants at which events
+arrive would make short intervals that fall between two reports look empty,
+so the occupied share would keep falling towards zero as the resolution is
+refined instead of converging.
 
 Each cleaning rule carries the ID used in the audit's cleaning plan (§7).
 Suspect intervals are flagged in their own column rather than deleted, so
@@ -14,11 +19,12 @@ every rule can be switched off for sensitivity analysis.
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 LOCAL_TZ = "Australia/Melbourne"
 
-RESOLUTIONS = ("10min", "30min", "1h")
+RESOLUTIONS = ("2min", "5min", "10min", "30min", "1h")
 """Supported interval lengths. Each divides an hour evenly, so intervals
 always line up with clock hours."""
 
@@ -27,6 +33,10 @@ SPACE_IDS = {
     "G.25": "227f1068-9e41-469f-bef0-275f27a0bdba",
 }
 """``floorspaceid`` of the two occupancy spaces the metadata sheet maps to a room."""
+
+DEFAULT_MAX_HOLD = "5min"
+"""Longest time an event's status is assumed to hold without a new event.
+On G.20, 99.9% of gaps between consecutive occupied events are under 340 s."""
 
 EVENT_COLUMNS = ["id", "timestamp", "status", "headcount"]
 """Columns :func:`clean_events` expects, renamed from the raw export."""
@@ -94,23 +104,36 @@ def _check_resolution(resolution: str) -> pd.Timedelta:
     return pd.Timedelta(resolution)
 
 
+def _to_ns(timestamps: pd.Series | pd.DatetimeIndex) -> np.ndarray:
+    """Return timezone-aware timestamps as int64 nanoseconds since the epoch (UTC)."""
+    utc = pd.DatetimeIndex(timestamps).tz_convert("UTC").tz_localize(None).as_unit("ns")
+    return utc.to_numpy().view("int64")
+
+
 def events_to_intervals(
     events: pd.DataFrame,
     resolution: str = "1h",
     occupied_threshold: int = 1,
+    max_hold: str = DEFAULT_MAX_HOLD,
     start: pd.Timestamp | None = None,
     end: pd.Timestamp | None = None,
 ) -> pd.DataFrame:
     """Reduce cleaned events to one row per fixed interval.
 
+    Each event's headcount is held from its timestamp until the next event,
+    or for at most ``max_hold`` if the next event is further away. The room is
+    occupied whenever the held headcount is at least ``occupied_threshold``.
+
     Parameters
     ----------
     events : pandas.DataFrame
         Output of :func:`clean_events`.
-    resolution : {"10min", "30min", "1h"}, default "1h"
+    resolution : {"2min", "5min", "10min", "30min", "1h"}, default "1h"
         Interval length.
     occupied_threshold : int, default 1
-        An interval is occupied if its maximum headcount is at least this value.
+        Smallest headcount that counts as occupied.
+    max_hold : str, default "5min"
+        Longest time (pandas timedelta string) an event's status is held.
     start, end : pandas.Timestamp, optional
         Timezone-aware first and last interval to include. Default to the
         intervals of the first and last event.
@@ -122,11 +145,15 @@ def events_to_intervals(
         from ``start`` to ``end`` inclusive) with columns:
 
         - ``n_events``: number of events in the interval (0 if none).
-        - ``max_headcount``: highest headcount in the interval (0 if none).
-        - ``occupied``: ``max_headcount >= occupied_threshold``.
+        - ``max_headcount``: highest headcount held at any time in the interval.
+        - ``occupied_fraction``: share of the interval, 0 to 1, during which
+          the room was occupied. Its mean over a period does not depend on the
+          resolution.
+        - ``occupied``: ``occupied_fraction > 0``, i.e. occupied at any time
+          in the interval.
 
-        Intervals with no events are treated as empty. Use
-        :func:`flag_outages` to mark those that are more likely sensor outages.
+        Time with no event held is treated as empty. Use :func:`flag_outages`
+        to mark intervals that are more likely sensor outages.
 
     Raises
     ------
@@ -134,7 +161,7 @@ def events_to_intervals(
         If ``events`` is empty, ``resolution`` is not supported, or
         ``occupied_threshold`` is below 1.
     """
-    _check_resolution(resolution)
+    step = _check_resolution(resolution)
     if events.empty:
         raise ValueError("No events to aggregate")
     if occupied_threshold < 1:
@@ -144,14 +171,43 @@ def events_to_intervals(
     # boundaries are also local ones. Working in UTC avoids the repeated hour
     # when daylight saving ends.
     interval = events["timestamp"].dt.tz_convert("UTC").dt.floor(resolution)
-    table = events.groupby(interval)["headcount"].agg(n_events="size", max_headcount="max")
-
     first = interval.min() if start is None else start.tz_convert("UTC").floor(resolution)
     last = interval.max() if end is None else end.tz_convert("UTC").floor(resolution)
     index = pd.date_range(first, last, freq=resolution)
-    table = table.reindex(index, fill_value=0)
 
-    table["occupied"] = table["max_headcount"] >= occupied_threshold
+    # Hold each event's headcount until the next event, capped at max_hold.
+    t = _to_ns(events["timestamp"])
+    headcount = events["headcount"].to_numpy()
+    hold_end = np.minimum(np.append(t[1:], np.iinfo(np.int64).max), t + pd.Timedelta(max_hold).value)
+
+    # Occupied time before x is F(x) = sum of clip(x - spell start, 0, spell
+    # length) over occupied spells; spells don't overlap, so F can be read off
+    # a cumulative sum. Occupied time in [a, b) is then F(b) - F(a).
+    occupied = headcount >= occupied_threshold
+    spell_start, spell_len = t[occupied], (hold_end - t)[occupied]
+    cumulative = np.concatenate([[0], np.cumsum(spell_len)])
+
+    def occupied_before(x: np.ndarray) -> np.ndarray:
+        k = np.searchsorted(spell_start, x, side="right") - 1
+        kk = np.maximum(k, 0)
+        return np.where(k >= 0, cumulative[kk] + np.minimum(x - spell_start[kk], spell_len[kk]), 0)
+
+    bounds = _to_ns(index)
+    if len(spell_start):
+        occupied_ns = occupied_before(bounds + step.value) - occupied_before(bounds)
+    else:
+        occupied_ns = np.zeros(len(bounds), dtype=np.int64)
+
+    # Headcount held over from an event before the interval started.
+    j = np.searchsorted(t, bounds, side="left") - 1
+    jj = np.maximum(j, 0)
+    carried = np.where((j >= 0) & (bounds < hold_end[jj]), headcount[jj], 0)
+
+    table = events.groupby(interval)["headcount"].agg(n_events="size", max_headcount="max")
+    table = table.reindex(index, fill_value=0)
+    table["max_headcount"] = np.maximum(table["max_headcount"].to_numpy(), carried)
+    table["occupied_fraction"] = occupied_ns / step.value
+    table["occupied"] = occupied_ns > 0
     table.index = index.tz_convert(LOCAL_TZ).rename("interval_start")
     return table
 
@@ -178,7 +234,7 @@ def flag_outages(
         Output of :func:`events_to_intervals`.
     events : pandas.DataFrame
         The cleaned events ``table`` was built from.
-    resolution : {"10min", "30min", "1h"}, default "1h"
+    resolution : {"2min", "5min", "10min", "30min", "1h"}, default "1h"
         The resolution ``table`` was built with.
     max_gap : str, default "24h"
         Shortest gap (pandas timedelta string) that can count as an outage.
@@ -188,9 +244,9 @@ def flag_outages(
     Returns
     -------
     pandas.DataFrame
-        A copy of ``table`` with a boolean ``outage`` column. Only intervals
-        lying entirely inside a flagged gap are marked, so they never contain
-        events.
+        A copy of ``table`` with a boolean ``outage`` column. Only unoccupied
+        intervals lying entirely inside a flagged gap are marked, so they never
+        contain events.
     """
     step = _check_resolution(resolution)
     table = table.copy()
@@ -210,7 +266,9 @@ def flag_outages(
         if covers_working:
             # Strictly after the gap's first event, so that event's own interval is excluded.
             inside = (idx > gap_start) & (idx + step <= gap_end)
-            table.loc[inside, "outage"] = True
+            # An interval just after the gap starts can still hold the last
+            # event's status (see max_hold); it is real data, not an outage.
+            table.loc[inside & ~table["occupied"], "outage"] = True
 
     return table
 
@@ -244,6 +302,7 @@ def build_occupancy_table(
     events: pd.DataFrame,
     resolution: str = "1h",
     occupied_threshold: int = 1,
+    max_hold: str = DEFAULT_MAX_HOLD,
     max_gap: str = "24h",
 ) -> tuple[pd.DataFrame, dict[str, int]]:
     """Run the full cleaning pipeline: clean, aggregate to intervals, flag.
@@ -252,9 +311,11 @@ def build_occupancy_table(
     ----------
     events : pandas.DataFrame
         Raw events for one space, as accepted by :func:`clean_events`.
-    resolution : {"10min", "30min", "1h"}, default "1h"
+    resolution : {"2min", "5min", "10min", "30min", "1h"}, default "1h"
         Interval length, passed to :func:`events_to_intervals`.
     occupied_threshold : int, default 1
+        Passed to :func:`events_to_intervals`.
+    max_hold : str, default "5min"
         Passed to :func:`events_to_intervals`.
     max_gap : str, default "24h"
         Passed to :func:`flag_outages`.
@@ -262,14 +323,15 @@ def build_occupancy_table(
     Returns
     -------
     table : pandas.DataFrame
-        Table with columns ``n_events``, ``max_headcount``, ``occupied``,
-        ``outage`` and ``night_detection``.
+        Table with columns ``n_events``, ``max_headcount``,
+        ``occupied_fraction``, ``occupied``, ``outage`` and ``night_detection``.
     log : dict of str to int
         Rows removed per event rule (see :func:`clean_events`) plus intervals
         flagged by ``OCC-GAP-01`` and ``OCC-NIGHT-01``.
     """
     clean, log = clean_events(events)
-    table = events_to_intervals(clean, resolution=resolution, occupied_threshold=occupied_threshold)
+    table = events_to_intervals(clean, resolution=resolution, occupied_threshold=occupied_threshold,
+                                max_hold=max_hold)
     table = flag_outages(table, clean, resolution=resolution, max_gap=max_gap)
     table = flag_night_detections(table)
     log["OCC-GAP-01"] = int(table["outage"].sum())
