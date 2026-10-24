@@ -28,3 +28,14 @@ Thumbs.db
 
 # Project brief PDFs (course material, not project deliverables)
 *.pdf
+
+# Word lock files and the working report draft (submitted via Moodle, not here)
+~$*
+reports/*.docx
+
+# Tables derived from the raw data (rebuilt by scripts/build_hourly_occupancy.py)
+/data/processed/
+
+# Local profiling cache built by scripts/profile_raw_data.py
+/data/*.duckdb
+/data/*.duckdb.wal

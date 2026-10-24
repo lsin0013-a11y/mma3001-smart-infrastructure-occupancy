@@ -1,13 +1,20 @@
-"""smart_infra: utilities for the Monash Smart Infrastructure occupancy and environmental dataset.
+"""smart_infra: occupancy-based ventilation for a room in Monash's Smart Infrastructure dataset.
 
-This package provides reusable building blocks for loading, cleaning and
-analysing time-stamped building sensor data (occupancy counts and
-environmental measurements such as CO2, PM2.5/PM10, temperature and
-humidity) collected from Monash Smart Infrastructure.
+The package turns the raw people-counter event stream for room G.20 into a
+clean occupancy series, forecasts its headcount, and evaluates ventilation
+strategies by simulating the room's CO2.
 
-The specific engineering question (e.g. occupancy prediction, missing-data
-reconstruction, anomaly detection) is implemented on top of these utilities
-as the project develops; see the project README for current scope.
+Modules, in pipeline order:
+
+- :mod:`smart_infra.occupancy`: clean the events and integrate them into
+  fixed intervals (held-state occupancy, exact time integration);
+- :mod:`smart_infra.academic_calendar`: semester periods and public holidays;
+- :mod:`smart_infra.forecasting`: leak-free forecasting inputs, baselines,
+  models, tuning and metrics;
+- :mod:`smart_infra.ventilation`: outdoor-air demand and the CO2 mass balance.
+
+See the project README for the problem definition, inputs, outputs and how to
+reproduce the results.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

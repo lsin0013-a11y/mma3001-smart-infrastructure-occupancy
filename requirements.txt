@@ -1,7 +1,10 @@
-pandas
-numpy
-scikit-learn
-matplotlib
-pytest
-pytest-html
-pdoc
+# Tested with Python 3.14.3 on Windows 11. Versions pinned for reproducibility.
+pandas==3.0.5
+numpy==2.5.1
+scikit-learn==1.9.1
+matplotlib==3.11.1
+duckdb==1.5.6
+openpyxl==3.1.5      # only for scripts/profile_raw_data.py (metadata sheet)
+pytest==9.1.1
+pytest-html==4.2.0
+pdoc==16.0.0
