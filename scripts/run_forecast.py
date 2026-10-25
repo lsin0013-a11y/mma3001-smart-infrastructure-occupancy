@@ -15,7 +15,7 @@ Writes:
 
 Usage (from the repository root, after ``build_occupancy_tables.py``)::
 
-    python scripts/run_forecast.py [--room G.20] [--horizon 30min]
+    python scripts/run_forecast.py [--room G.20] [--horizon 10min]
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ GRID = [
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--room", default="G.20")
-    parser.add_argument("--horizon", default="30min", help="how far ahead the forecast is issued")
+    parser.add_argument("--horizon", default="10min", help="how far ahead the forecast is issued")
     args = parser.parse_args()
     stem = args.room.replace(".", "").lower()
 
@@ -90,7 +90,7 @@ def write_markdown(results: pd.DataFrame, tuning_notes: list, args: argparse.Nam
     lines = [
         f"# {args.room} headcount forecast: test results",
         "",
-        f"Forecast issued {args.horizon} ahead (one interval ahead at 1 h). Trained on 2024-03 to 2025-12, "
+        f"Forecast issued {args.horizon} ahead (one interval ahead at 30 min and 1 h). Trained on 2024-03 to 2025-12, "
         "tested on 2026-01-01 to 2026-04-22; outage intervals excluded. Errors are in people (mean headcount "
         "per interval). *Daytime* = weekdays 08:00-20:00. *Under* = share of intervals forecast below the "
         "observed headcount (the room would be under-ventilated).",

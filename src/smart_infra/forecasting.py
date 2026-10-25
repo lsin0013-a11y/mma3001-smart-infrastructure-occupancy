@@ -1,7 +1,7 @@
 """Short-term forecast of a room's average headcount, for ventilation control.
 
 The forecast is issued at time *t* for the interval starting at *t + horizon*
-(30 min by default). It may only use what is known at *t*: the calendar for
+(10 min by default). It may only use what is known at *t*: the calendar for
 the target interval, and headcounts from intervals that had already finished
 by *t*. :func:`make_dataset` builds those inputs, so no model can see the
 future it is predicting.
@@ -40,7 +40,7 @@ CALENDAR_COLUMNS = ["minute_of_day", "day_of_week", "weekend", "public_holiday",
 LAG_COLUMNS = ["recent", "recent_hour_mean", "same_time_yesterday", "same_time_last_week"]
 
 
-def make_dataset(table: pd.DataFrame, horizon: str = "30min", calendar: pd.DataFrame | None = None) -> pd.DataFrame:
+def make_dataset(table: pd.DataFrame, horizon: str = "10min", calendar: pd.DataFrame | None = None) -> pd.DataFrame:
     """Build forecasting inputs and target from an occupancy table.
 
     Parameters
@@ -49,7 +49,7 @@ def make_dataset(table: pd.DataFrame, horizon: str = "30min", calendar: pd.DataF
         Occupancy table at a regular resolution (output of
         :func:`smart_infra.occupancy.build_occupancy_table`), with columns
         ``mean_headcount`` and ``outage``.
-    horizon : str, default "30min"
+    horizon : str, default "10min"
         How far ahead the forecast is issued. Rounded up to a whole number of
         intervals, and at least one interval.
     calendar : pandas.DataFrame, optional
