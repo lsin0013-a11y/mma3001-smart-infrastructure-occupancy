@@ -19,6 +19,8 @@ The project turns 1.9 million people-counter events into a clean 5-minute occupa
 
 ![Ventilation trade-off](reports/figures/ventilation_tradeoff.png)
 
+How and why the design reached this point (framing, data exclusions, resolution, forecast horizon, and why the hybrid was rejected) is recorded in the [decision log](reports/decision_log.md).
+
 - **Occupancy-based ventilation needs about 85% less outdoor air than the fixed schedule and breaches the CO2 limit far less**, because the fixed schedule both over-ventilates a room that is empty 71% of the time and switches off while people are still there in the evening.
 - **Ten minutes ahead, the forecast adds nothing that a safety margin does not.** The persistence baseline ("same as now") is the most accurate forecast (MAE 0.349 people; gradient boosting 0.366). The hybrid's improvement over the live sensor comes from supplying a little more air: the larger of the last two readings matches it with no model, and a 15% margin beats it.
 - **The safety margin was chosen before the test period** (on 2025): the smallest margin that cut person-hours above the limit by at least 90%. At exactly 10 L/s per person the room settles at 940 ppm, just under 1000 ppm, so some margin is needed ([sensitivity analysis](reports/sensitivity.md)).
