@@ -86,6 +86,7 @@ THRESHOLDS = (0.1, 0.25, 0.5, 1.0, 2.0)
 COLORS = {"always_on": "#0b0b0b", "fixed_schedule": "#52514e", "oracle": "#1baf7a", "live_sensor": "#eda100", "recent_max": "#9e9d98",
           "forecast": "#2a78d6", "hybrid": "#6250d6", "live_margin": "#eb6834"}
 INK, MUTED, GRID = "#0b0b0b", "#52514e", "#e4e3df"
+AIR_AXIS_CUT = 12.0  # % of fixed-schedule air where Figure 1's air axis is cut
 ACCENT, MUTED_BAR = "#2a78d6", "#c3c2bd"  # highlighted final design; other strategies
 LABELS = {"always_on": "Always on (design occupancy)", "fixed_schedule": "Fixed schedule (07-19 weekdays)", "oracle": "Oracle (actual headcount)",
           "live_sensor": "Live sensor (previous interval)", "recent_max": "Larger of last two readings",
@@ -235,7 +236,11 @@ def plot_strategies(results: pd.DataFrame, final: str, path: Path) -> None:
     """Outdoor air supplied and person-hours above the CO2 limit per strategy, 5-min control.
 
     Two panels share the strategy rows, so each measure keeps its own scale;
-    the final design is the one highlighted bar.
+    the final design is highlighted. Air is shown as a share of the fixed
+    schedule's. The two baselines use 15-40 times more air than the
+    demand-controlled strategies, which would be slivers on a full scale, so
+    the axis is cut at :data:`AIR_AXIS_CUT` and the baseline bars run off it
+    with a break mark and their value written at the end.
     """
     r = results[results["control"] == "5min"].set_index("strategy")
     order = [k for k in ("always_on", "fixed_schedule", "oracle", "live_sensor", "recent_max", "forecast",
@@ -246,18 +251,32 @@ def plot_strategies(results: pd.DataFrame, final: str, path: Path) -> None:
     colors = [ACCENT if k == final else MUTED_BAR for k in order]
     y = np.arange(len(order))[::-1]
 
-    fig, (left, right) = plt.subplots(1, 2, figsize=(7.0, 3.6), dpi=200, sharey=True)
-    for ax, values, fmt, title in (
-        (left, r["air_m3"] / 1000, "{:,.0f}k", "Outdoor air supplied\n(m³ over the test period)"),
-        (right, r["person_hours_over_limit"], "{:,.1f}", f"Person-hours above {CO2_LIMIT:.0f} ppm\n(modelled CO2)"),
-    ):
-        ax.barh(y, values, height=0.62, color=colors, zorder=2)
-        top = values.max()
-        for yi, v in zip(y, values):
-            ax.text(v + top * 0.02, yi, fmt.format(v), va="center", fontsize=7.5, color=INK)
-        ax.set_xlim(0, top * 1.25 if top > 0 else 1)
-        ax.set_title(title, color=INK, fontsize=9, loc="left")
-        ax.set_xticks([])
+    fig, (left, right) = plt.subplots(1, 2, figsize=(7.2, 3.6), dpi=200, sharey=True,
+                                      gridspec_kw={"width_ratios": [1.4, 1]})
+    share = 100 * r["air_m3"] / r.loc["fixed_schedule", "air_m3"]
+    cut = AIR_AXIS_CUT
+    left.barh(y, share.clip(upper=cut), height=0.62, color=colors, zorder=2)
+    for yi, v, m3 in zip(y, share, r["air_m3"] / 1000):
+        if v > cut:
+            # Break mark: a white slash through the bar near the axis cut.
+            left.plot([cut * 0.38, cut * 0.42], [yi - 0.38, yi + 0.38], color="white", lw=3, zorder=3)
+            left.text(cut * 0.97, yi, f"{v:,.0f}%  ({m3:,.0f}k m³)", va="center", ha="right",
+                      fontsize=7.5, color=INK, zorder=4)
+        else:
+            left.text(v + cut * 0.015, yi, f"{v:.1f}%  ({m3:,.0f}k m³)", va="center", fontsize=7.5, color=INK)
+    left.set_xlim(0, cut)
+    left.set_xticks([])
+    left.set_title("Outdoor air supplied\n(% of fixed schedule; axis cut at "
+                   f"{cut:.0f}%)", color=INK, fontsize=9, loc="left")
+
+    hours = r["person_hours_over_limit"]
+    right.barh(y, hours, height=0.62, color=colors, zorder=2)
+    for yi, v in zip(y, hours):
+        right.text(v + hours.max() * 0.02, yi, f"{v:,.1f}", va="center", fontsize=7.5, color=INK)
+    right.set_xlim(0, hours.max() * 1.3 if hours.max() > 0 else 1)
+    right.set_xticks([])
+    right.set_title(f"Person-hours above {CO2_LIMIT:.0f} ppm\n(modelled CO2)", color=INK, fontsize=9, loc="left")
+    for ax in (left, right):
         style(ax)
         ax.grid(False)
         ax.spines["bottom"].set_visible(False)
@@ -267,7 +286,7 @@ def plot_strategies(results: pd.DataFrame, final: str, path: Path) -> None:
     fig.suptitle("Ventilation strategies over the test period, 5-min control", color=INK, fontsize=11,
                  x=0.01, ha="left")
     # Fixed margins: tight_layout clips the long strategy names next to a suptitle.
-    fig.subplots_adjust(left=0.36, right=0.97, top=0.78, bottom=0.03, wspace=0.12)
+    fig.subplots_adjust(left=0.34, right=0.97, top=0.78, bottom=0.03, wspace=0.10)
     fig.savefig(path, facecolor="white")
 
 
