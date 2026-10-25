@@ -134,7 +134,8 @@ def co2_study() -> list[str]:
         "|---|---|---|",
     ]
     q_peak = airflow.max() / 1000
-    for dt in (60, 120, 300, 600, 900, 1200, 1800):
+    # Steps up to 3 h, so the largest pass Euler's stability limit in the large room.
+    for dt in (60, 300, 900, 1800, 3600, 7200, 10800):
         k = int(dt // 60)
         p, q = people[::k], airflow[::k]
         reference = simulate_co2(p, q, float(dt))
@@ -147,7 +148,7 @@ def co2_study() -> list[str]:
     lines += [
         "",
         f"Euler's error grows roughly in proportion to the step (first-order method), and the method is only "
-        f"stable while Q·dt/V < 2, i.e. dt < {limit:.0f} s at this peak flow. Past that limit (the 1800 s row) "
+        f"stable while Q·dt/V < 2, i.e. dt < {limit:,.0f} s at this peak flow. Past that limit (the 10800 s row) "
         "the solution overshoots and oscillates whenever the flow is high, and the error jumps; with a "
         "constant high flow it grows without bound (tested). The exact solution has no step-"
         "size error for piecewise-constant inputs and is unconditionally stable, so it is used for all "

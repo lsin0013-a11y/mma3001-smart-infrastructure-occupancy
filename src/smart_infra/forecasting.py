@@ -171,7 +171,12 @@ def _linear() -> SklearnModel:
 def _boosting(columns: list[str], quantile: float | None = None, **params) -> SklearnModel:
     categorical = [c in ("day_of_week", "period") for c in columns]
     loss = {"loss": "quantile", "quantile": quantile} if quantile is not None else {}
-    estimator = HistGradientBoostingRegressor(categorical_features=categorical, random_state=0, **loss, **params)
+    # Early stopping off: it holds out a random 10% of the training rows and
+    # stops on that score, and floating-point noise in the inputs (1e-14)
+    # changed where it stopped (91 vs 300 iterations, MAE 0.398 vs 0.405), so
+    # results were not reproducible. ``max_iter`` is the tuned setting instead.
+    estimator = HistGradientBoostingRegressor(categorical_features=categorical, random_state=0,
+                                              early_stopping=False, **loss, **params)
     return SklearnModel(estimator, columns)
 
 

@@ -1,6 +1,6 @@
 # Decision log
 
-The key decisions in this project, in the order they were made, with the evidence behind each. Every number comes from a script in `scripts/` and is reproduced in the results files linked here.
+The key decisions in this project, in the order they were made, with the evidence behind each. Sections 1 to 5 were made under the first room estimate (30 m²); section 6 records how correcting it changed the design. Every number comes from a script in `scripts/` and is reproduced in the results files linked here.
 
 ## 1. Problem framing
 
@@ -34,7 +34,7 @@ The key decisions in this project, in the order they were made, with the evidenc
 - Longer horizons are less accurate. The forecast MAE is 0.37 people at 10 minutes, 0.57 at 30 minutes and 0.68 at 1 hour.
 - With a longer horizon the hybrid also uses more air (14.8% to 17.1% of the fixed schedule) for about the same breaches. See [`horizon_comparison.md`](horizon_comparison.md).
 
-## 5. Final design: live headcount + 15% safety margin (the hybrid was rejected)
+## 5. Live headcount + 15% safety margin; the hybrid was rejected (superseded by section 6)
 
 The hybrid strategy (the larger of the live reading and the forecast) at first looked like the forecast was anticipating arrivals: it halved the live sensor's breaches. Testing it against strategies without a forecast showed otherwise. Over the test period, at 5-minute control (see [`ventilation_results.md`](ventilation_results.md)):
 
@@ -49,9 +49,42 @@ The hybrid strategy (the larger of the live reading and the forecast) at first l
 - **The margin was chosen on 2025, before the test period.** It is the smallest margin, in 5% steps, that cuts person-hours above the limit by at least 90%.
 - **The forecasting work stays in the report as a tested, negative result.** The models were compared against baselines on a withheld test period.
 
-## 6. Assumptions to keep in view
+## 6. Room size corrected: 300 m², and the margin is no longer needed (2026-10-25)
 
-- **The fixed schedule is an assumed comparison**, not G.20's actual HVAC schedule. It is sized for 20 people and runs Monday to Friday, 07:00 to 19:00, then switches off. The modelled CO2 peaks after 19:00 depend on this assumption and on the 0.3 air-changes-per-hour infiltration rate.
+- **The metadata places G.20 in Building 60** and labels its three (missing) CO2 sensors "Informal Breakout 1–3". The student then estimated the room at about 20 m × 15 m (300 m², 810 m³ at 2.7 m), not 30 m².
+- **The capacity cap moves from 20 to 200 people** (1.5 m² per person). The highest reading, 72 people, is now physically possible and is no longer treated as a sensor error. No reading is capped.
+- **Design occupancy: 42 people (420 L/s).** This is the 99.9th percentile of the headcount over occupied minutes in the training period. It sizes the fixed strategies and the fallback. The student chose the 99.9th percentile over the maximum, so that one brief crowd or sensor glitch does not set the design.
+- **A new baseline:** constant air volume, always on, sized for the design occupancy. This is the conventional system described in the report's §1.2.
+- **The margin chosen on 2025 is now 0%.** In an 810 m³ room CO2 builds up over hours, so the 5-minute delay of the live reading causes no time above the limit. Final design: live headcount at 5-min control, plus the fallback below.
+
+| Strategy (test period, 5-min control) | Air (m³) | Person-hours > 1000 ppm (modelled) |
+|---|---|---|
+| Always on (42 people) | 3,757,000 | 0 |
+| Fixed schedule (42 people, 07–19 weekdays) | 1,398,000 | 37.6 |
+| **Live sensor** | **90,000** | **0** |
+| Hybrid (live sensor + 10-min forecast) | 102,000 | 0 |
+
+- **Control interval:** with the live sensor, 5 and 10 min give no time above the limit, 30 min gives 15.5 person-hours and 1 h gives 54. 5 min is kept.
+- **Lesson:** the conclusion about the margin depended on the room size. The earlier sensitivity analysis only varied the area between 20 and 40 m², so it could not reveal this.
+
+## 7. Sensor-failure fallback: safe, not efficient (2026-10-25)
+
+- **The problem.** A dead people counter sends nothing, exactly like an empty room, so live-sensor control would supply no air.
+- **The student first asked for a fallback based on the average headcount.** Testing showed it is too low: when the room is in use it usually holds more people than the average.
+- **The adopted fallback.** While the sensor is known to be dead, supply full design air (420 L/s) whenever the average headcount for that time of the week exceeds a threshold, and none otherwise. The threshold, 0.25 people, was chosen on 2025 (averages from 2024): the largest that keeps person-hours above the limit no higher than the working sensor's.
+
+| Sensor dead for the whole test period | Air (m³) | Person-hours > 1000 ppm (modelled) |
+|---|---|---|
+| No fallback | 0 | 148 |
+| Average headcount | 79,000 | 133 |
+| **Design air when usually in use** | **2,205,000** | **0** |
+
+- **The cost is small because outages are rare.** Outages covered 0.9% of the training period; at that rate the fallback adds about 22% to the working sensor's air use.
+- **Limitation, identified by the student.** The controller must know the sensor is dead, which this data cannot show. A second sensor or a device health check is needed. G.20 has two counters, but the extract merges them.
+
+## 8. Assumptions to keep in view
+
+- **The fixed schedule is an assumed comparison**, not G.20's actual HVAC schedule. It is sized for the design occupancy (42 people) and runs Monday to Friday, 07:00 to 19:00, then switches off. The modelled CO2 peaks after 19:00 depend on this assumption and on the 0.3 air-changes-per-hour infiltration rate.
 - **Air settings are assumptions:**
   - CO2 generation of 0.0052 L/s per person;
   - outdoor CO2 of 420 ppm;
@@ -60,7 +93,7 @@ The hybrid strategy (the larger of the live reading and the forecast) at first l
   See [`sensitivity.md`](sensitivity.md) for which of these matter.
 - **The test period is short.** It runs from 1 January to 22 April 2026: the summer break and the first seven weeks of semester 1.
 
-## 7. Future work
+## 9. Future work
 
 - Obtain G.20's CO2 data (ES1G01 to ES1G03) to validate the CO2 model.
 - Test forecasting where it could matter:

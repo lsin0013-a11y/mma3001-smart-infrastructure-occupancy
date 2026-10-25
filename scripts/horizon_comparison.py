@@ -25,10 +25,10 @@ from build_occupancy_tables import OCC_CSV, load_space_events
 from smart_infra.forecasting import TARGET, evaluate, make_dataset, make_models, split_by_date
 from smart_infra.occupancy import SPACE_IDS, build_occupancy_table, read_table
 from smart_infra.ventilation import RATE_PER_PERSON, assess, infiltration_airflow, simulate_co2
-from ventilation_study import DT, TEST_START, fixed_schedule
+from ventilation_study import DT, TEST_START, design_people, fixed_schedule
 
 HORIZONS = ["10min", "20min", "30min", "1h"]
-BOOSTING = {"learning_rate": 0.05, "max_leaf_nodes": 15, "max_iter": 300}  # from run_forecast.py tuning
+BOOSTING = {"learning_rate": 0.05, "max_leaf_nodes": 15, "max_iter": 300}  # from run_forecast.py tuning (5 min)
 RES = "5min"
 
 
@@ -40,10 +40,10 @@ def main() -> None:
     stem = args.room.replace(".", "").lower()
 
     events = load_space_events(args.datasets / OCC_CSV, SPACE_IDS[args.room])
-    minute, _ = build_occupancy_table(events, resolution="1min")
-    minute = minute[minute.index >= pd.Timestamp(TEST_START, tz=minute.index.tz)]
+    full, _ = build_occupancy_table(events, resolution="1min")
+    minute = full[full.index >= pd.Timestamp(TEST_START, tz=full.index.tz)]
     people = minute["mean_headcount"].where(~minute["outage"], 0.0).to_numpy()
-    fixed = fixed_schedule(minute.index)
+    fixed = fixed_schedule(minute.index, design_people(full))
     fixed_co2 = simulate_co2(people, fixed + infiltration_airflow(), DT)
 
     table = read_table(Path("data/processed") / f"{stem}_{RES}.csv")

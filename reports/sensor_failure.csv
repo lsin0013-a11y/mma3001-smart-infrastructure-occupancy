@@ -1,0 +1,5 @@
+case,air_m3,required_m3,person_hours_over_limit,share_occupied_time_over_limit,peak_ppm,mean_occupied_ppm
+Working sensor (live),90241.6600,90250.2600,0.0000,0.0000,860.5860,535.6526
+"Dead sensor, no fallback",0.0000,90250.2600,148.2539,0.0121,1779.6351,583.8872
+"Dead sensor, average headcount",79160.8440,90250.2600,133.4233,0.0105,1702.9179,555.8579
+"Dead sensor, fallback (design air when average > 0.25)",2205126.0000,90250.2600,0.0000,0.0000,915.0715,451.1512
