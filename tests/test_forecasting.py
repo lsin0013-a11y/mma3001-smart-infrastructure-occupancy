@@ -29,12 +29,12 @@ def make_table(days=10, freq="5min", seed=0):
 
 def test_make_dataset_only_uses_finished_intervals():
     table = make_table()
-    data = make_dataset(table, horizon="30min")
-    # At 5-min resolution the latest interval known 30 min ahead is 6 intervals back.
+    data = make_dataset(table)
+    # At 5-min resolution the latest interval known 10 min ahead is 2 intervals back.
     t = data.index[100]
-    assert data.loc[t, "recent"] == table.loc[t - pd.Timedelta("30min"), TARGET]
+    assert data.loc[t, "recent"] == table.loc[t - pd.Timedelta("10min"), TARGET]
     assert data.loc[t, "same_time_last_week"] == table.loc[t - pd.Timedelta("7D"), TARGET]
-    hour = table[TARGET].loc[t - pd.Timedelta("85min"): t - pd.Timedelta("30min")]
+    hour = table[TARGET].loc[t - pd.Timedelta("65min"): t - pd.Timedelta("10min")]
     assert data.loc[t, "recent_hour_mean"] == pytest.approx(hour.mean())
 
 
