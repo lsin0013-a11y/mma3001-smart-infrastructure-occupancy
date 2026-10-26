@@ -13,7 +13,7 @@ Strategies (supply = rate per person x headcount used):
 
 - ``always_on``: constant air volume for the design occupancy, all the time;
 - ``fixed_schedule``: design occupancy, Mon-Fri 07:00-19:00, off otherwise;
-- ``oracle``: the interval's actual mean headcount (perfect knowledge; the
+- ``ideal``: the interval's actual mean headcount (perfect knowledge; the
   least air that meets the per-person rate, not achievable in practice);
 - ``live_sensor``: the previous interval's measured headcount (reacts after
   the fact, one interval late);
@@ -83,12 +83,12 @@ MARGIN_TARGET = 0.9
 THRESHOLDS = (0.1, 0.25, 0.5, 1.0, 2.0)
 
 # Default chart palette (dataviz skill) and ink.
-COLORS = {"always_on": "#0b0b0b", "fixed_schedule": "#52514e", "oracle": "#1baf7a", "live_sensor": "#eda100", "recent_max": "#9e9d98",
+COLORS = {"always_on": "#0b0b0b", "fixed_schedule": "#52514e", "ideal": "#1baf7a", "live_sensor": "#eda100", "recent_max": "#9e9d98",
           "forecast": "#2a78d6", "hybrid": "#6250d6", "live_margin": "#eb6834"}
 INK, MUTED, GRID = "#0b0b0b", "#52514e", "#e4e3df"
 AIR_AXIS_CUT = 12.0  # % of fixed-schedule air where Figure 1's air axis is cut
 ACCENT, MUTED_BAR = "#2a78d6", "#c3c2bd"  # highlighted final design; other strategies
-LABELS = {"always_on": "Always on (design occupancy)", "fixed_schedule": "Fixed schedule (07-19 weekdays)", "oracle": "Oracle (actual headcount)",
+LABELS = {"always_on": "Always on (design occupancy)", "fixed_schedule": "Fixed schedule (07-19 weekdays)", "ideal": "Ideal (knows exact headcount)",
           "live_sensor": "Live sensor (previous interval)", "recent_max": "Larger of last two readings",
           "forecast": "Forecast (10 min ahead)", "hybrid": "Hybrid (larger of live sensor, forecast)",
           "live_margin": "Live sensor + safety margin"}
@@ -106,7 +106,7 @@ def control_headcounts(stem: str, res: str, margin: float) -> pd.DataFrame:
     measured = measured_headcount(stem, res)
     live = measured.shift(1).reindex(forecasts.index)
     return pd.DataFrame({
-        "oracle": forecasts["observed"],
+        "ideal": forecasts["observed"],
         "live_sensor": live,
         "recent_max": np.maximum(live, measured.shift(2).reindex(forecasts.index)),
         "forecast": forecasts["boosting"],
@@ -243,7 +243,7 @@ def plot_strategies(results: pd.DataFrame, final: str, path: Path) -> None:
     with a break mark and their value written at the end.
     """
     r = results[results["control"] == "5min"].set_index("strategy")
-    order = [k for k in ("always_on", "fixed_schedule", "oracle", "live_sensor", "recent_max", "forecast",
+    order = [k for k in ("always_on", "fixed_schedule", "ideal", "live_sensor", "recent_max", "forecast",
                          "hybrid", "live_margin") if k in r.index and (k != "live_margin" or final == k)]
     r = r.loc[order]
     names = [("Live sensor" if k == "live_sensor" else LABELS[k]) + (" (final design)" if k == final else "")

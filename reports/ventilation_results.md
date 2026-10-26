@@ -49,7 +49,7 @@ Sensor outages covered 0.9% of the training period. At that rate the expected ai
 |---|---|---|---|---|---|---|
 | Always on (design occupancy) | 3,757,320 | 268.8% | 0.0 | 0.0% | 451 | 915 |
 | Fixed schedule (07-19 weekdays) | 1,397,718 | 100.0% | 37.6 | 0.2% | 461 | 1613 |
-| Oracle (actual headcount) | 90,250 | 6.5% | 0.0 | 0.0% | 536 | 870 |
+| Ideal (knows exact headcount) | 90,250 | 6.5% | 0.0 | 0.0% | 536 | 870 |
 | Live sensor (previous interval) | 90,242 | 6.5% | 0.0 | 0.0% | 536 | 861 |
 | Larger of last two readings | 101,530 | 7.3% | 0.0 | 0.0% | 532 | 850 |
 | Forecast (10 min ahead) | 86,031 | 6.2% | 60.4 | 0.2% | 539 | 1167 |
@@ -61,7 +61,7 @@ Sensor outages covered 0.9% of the training period. At that rate the expected ai
 |---|---|---|---|---|---|---|
 | Always on (design occupancy) | 3,757,824 | 268.9% | 0.0 | 0.0% | 451 | 915 |
 | Fixed schedule (07-19 weekdays) | 1,397,970 | 100.0% | 37.6 | 0.2% | 461 | 1613 |
-| Oracle (actual headcount) | 90,252 | 6.5% | 0.0 | 0.0% | 536 | 892 |
+| Ideal (knows exact headcount) | 90,252 | 6.5% | 0.0 | 0.0% | 536 | 892 |
 | Live sensor (previous interval) | 90,236 | 6.5% | 0.0 | 0.0% | 535 | 860 |
 | Larger of last two readings | 104,306 | 7.5% | 0.0 | 0.0% | 531 | 846 |
 | Forecast (10 min ahead) | 86,215 | 6.2% | 67.0 | 0.3% | 538 | 1238 |
@@ -73,7 +73,7 @@ Sensor outages covered 0.9% of the training period. At that rate the expected ai
 |---|---|---|---|---|---|---|
 | Always on (design occupancy) | 3,759,336 | 269.0% | 0.0 | 0.0% | 451 | 915 |
 | Fixed schedule (07-19 weekdays) | 1,398,474 | 100.1% | 37.6 | 0.2% | 461 | 1613 |
-| Oracle (actual headcount) | 90,250 | 6.5% | 0.0 | 0.0% | 536 | 953 |
+| Ideal (knows exact headcount) | 90,250 | 6.5% | 0.0 | 0.0% | 536 | 953 |
 | Live sensor (previous interval) | 90,208 | 6.5% | 15.5 | 0.0% | 535 | 1041 |
 | Larger of last two readings | 112,041 | 8.0% | 7.5 | 0.0% | 529 | 1011 |
 | Forecast (10 min ahead) | 85,880 | 6.1% | 86.4 | 0.4% | 540 | 1355 |
@@ -85,7 +85,7 @@ Sensor outages covered 0.9% of the training period. At that rate the expected ai
 |---|---|---|---|---|---|---|
 | Always on (design occupancy) | 3,760,848 | 269.1% | 0.0 | 0.0% | 451 | 915 |
 | Fixed schedule (07-19 weekdays) | 1,399,230 | 100.1% | 37.6 | 0.2% | 461 | 1613 |
-| Oracle (actual headcount) | 90,259 | 6.5% | 3.7 | 0.0% | 537 | 1028 |
+| Ideal (knows exact headcount) | 90,259 | 6.5% | 3.7 | 0.0% | 537 | 1028 |
 | Live sensor (previous interval) | 90,180 | 6.5% | 53.9 | 0.2% | 536 | 1497 |
 | Larger of last two readings | 119,468 | 8.5% | 51.9 | 0.2% | 530 | 1366 |
 | Forecast (10 min ahead) | 85,159 | 6.1% | 106.7 | 0.5% | 542 | 1522 |

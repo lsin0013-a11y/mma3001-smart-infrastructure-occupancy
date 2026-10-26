@@ -146,7 +146,7 @@ The tests use small synthetic datasets with known answers, so they run without t
 
 ## AI use
 
-AI assistance (Claude) was used for code, analysis scripts, documentation and report drafting under the student's direction. Every result is produced by a script in this repository and checked by tests. The engineering problem, the ventilation framing, the room parameters and the methodological decisions were the student's. The full AI-use reflection is in the written report.
+AI assistance (Claude) was used for code, analysis scripts, documentation and report drafting under the student's direction. Every result is produced by a script in this repository and checked by tests. The engineering problem, the ventilation framing, the room parameters and the methodological decisions were the student's, and the student wrote Section 1 of the report. The full AI-use reflection is in the written report.
 
 ## License
 
