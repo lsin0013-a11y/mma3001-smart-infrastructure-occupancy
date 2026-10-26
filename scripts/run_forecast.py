@@ -66,11 +66,10 @@ def main() -> None:
             predict_s = time.perf_counter() - started
             forecasts[name] = pred
 
-            quantile = 0.9 if name.endswith("q90") else None
             # Daytime on weekdays is when ventilation matters most.
             day = ((X_test["day_of_week"] < 5) & (X_test["minute_of_day"] >= 8 * 60)
                    & (X_test["minute_of_day"] < 20 * 60)).to_numpy()
-            overall = evaluate(y_test, pred, quantile)
+            overall = evaluate(y_test, pred)
             daytime = evaluate(y_test[day], pred[day])
             rows.append({"resolution": res, "model": name, **overall,
                          "daytime_mae": daytime["mae"], "fit_s": fit_s, "predict_s": predict_s})

@@ -82,7 +82,11 @@ The hybrid strategy (the larger of the live reading and the forecast) at first l
 - **The cost is small because outages are rare.** Outages covered 0.9% of the training period; at that rate the fallback adds about 22% to the working sensor's air use.
 - **Limitation, identified by the student.** The controller must know the sensor is dead, which this data cannot show. A second sensor or a device health check is needed. G.20 has two counters, but the extract merges them.
 
-## 8. Assumptions to keep in view
+## 8. One forecast, not two (2026-10-26)
+
+- **The 90th-percentile forecast was removed.** It predicted a deliberately high headcount, so that ventilation would err on the safe side. The live sensor already gives no time above the CO2 limit, and no strategy used the cautious forecast, so it added complexity without changing any decision. The project now has one forecast: the number of people expected in G.20 ten minutes ahead.
+
+## 9. Assumptions to keep in view
 
 - **The fixed schedule is an assumed comparison**, not G.20's actual HVAC schedule. It is sized for the design occupancy (42 people) and runs Monday to Friday, 07:00 to 19:00, then switches off. The modelled CO2 peaks after 19:00 depend on this assumption and on the 0.3 air-changes-per-hour infiltration rate.
 - **Air settings are assumptions:**
@@ -93,7 +97,7 @@ The hybrid strategy (the larger of the live reading and the forecast) at first l
   See [`sensitivity.md`](sensitivity.md) for which of these matter.
 - **The test period is short.** It runs from 1 January to 22 April 2026: the summer break and the first seven weeks of semester 1.
 
-## 9. Future work
+## 10. Future work
 
 - Obtain G.20's CO2 data (ES1G01 to ES1G03) to validate the CO2 model.
 - Test forecasting where it could matter:
