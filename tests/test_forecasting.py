@@ -33,6 +33,7 @@ def test_make_dataset_only_uses_finished_intervals():
     # At 5-min resolution the latest interval known 10 min ahead is 2 intervals back.
     t = data.index[100]
     assert data.loc[t, "recent"] == table.loc[t - pd.Timedelta("10min"), TARGET]
+    assert data.loc[t, "same_time_yesterday"] == table.loc[t - pd.Timedelta("1D"), TARGET]
     assert data.loc[t, "same_time_last_week"] == table.loc[t - pd.Timedelta("7D"), TARGET]
     hour = table[TARGET].loc[t - pd.Timedelta("65min"): t - pd.Timedelta("10min")]
     assert data.loc[t, "recent_hour_mean"] == pytest.approx(hour.mean())
@@ -72,24 +73,21 @@ def test_baselines():
     assert profile[busy.to_numpy()].mean() > 4 > profile[~busy.to_numpy()].mean()
 
 
-def test_models_learn_the_pattern_and_q90_sits_above_the_mean():
+def test_models_learn_the_pattern():
     data = make_dataset(make_table(days=21))
     train, test = split_by_date(data, test_start="2024-05-24")
     models = make_models({"max_iter": 50})
     preds = {}
-    for name in ("linear", "boosting", "boosting_q90"):
+    for name in ("linear", "boosting", "boosting_calendar_only"):
         model = models[name].fit(train.drop(columns=TARGET), train[TARGET])
         preds[name] = model.predict(test.drop(columns=TARGET))
         assert (preds[name] >= 0).all()
     assert evaluate(test[TARGET], preds["boosting"])["mae"] < 0.5
-    assert evaluate(test[TARGET], preds["boosting_q90"])["under_share"] < 0.3
 
 
 def test_evaluate_metrics():
     y = pd.Series([1.0, 2.0, 3.0])
-    result = evaluate(y, np.array([2.0, 2.0, 2.0]), quantile=0.9)
+    result = evaluate(y, np.array([2.0, 2.0, 2.0]))
     assert result["mae"] == pytest.approx(2 / 3)
     assert result["bias"] == pytest.approx(0.0)
     assert result["under_share"] == pytest.approx(1 / 3)
-    # Pinball at q=0.9: under-forecast by 1 costs 0.9, over-forecast by 1 costs 0.1.
-    assert result["pinball"] == pytest.approx((0.1 + 0 + 0.9) / 3)

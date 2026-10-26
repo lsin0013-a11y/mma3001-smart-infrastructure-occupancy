@@ -37,8 +37,11 @@ OUTDOOR_CO2 = 420.0
 CO2_LIMIT = 1000.0
 """Indoor CO2 level used as the air-quality threshold, ppm."""
 
-ROOM_AREA = 30.0
-"""Floor area of G.20, m2 (the student's estimate: about 5 m by 6 m)."""
+ROOM_AREA = 300.0
+"""Floor area of G.20, m2 (the student's estimate: about 20 m by 15 m)."""
+
+DESIGN_QUANTILE = 0.999
+"""Quantile of the occupied-time headcount that the design occupancy covers."""
 
 ROOM_HEIGHT = 2.7
 """Ceiling height of G.20, m (assumed)."""
@@ -80,6 +83,80 @@ def required_airflow(people: np.ndarray, rate_per_person: float = RATE_PER_PERSO
     return rate_per_person * people
 
 
+def design_occupancy(headcount: np.ndarray, quantile: float = DESIGN_QUANTILE) -> int:
+    """Number of people a fixed ventilation design is sized for.
+
+    The ``quantile`` of the headcount over occupied time, rounded up to whole
+    people. Sizing for the very highest reading would let one brief crowd (or
+    sensor glitch) set the airflow for every hour of the year; the 99.9th
+    percentile covers all but the rarest peaks.
+
+    Parameters
+    ----------
+    headcount : array_like
+        Headcount per equal time step (e.g. 1-min means). Zeros (empty room)
+        are ignored.
+    quantile : float, default 0.999
+        Share of occupied time the design covers, between 0 and 1.
+
+    Returns
+    -------
+    int
+        Design occupancy, people.
+
+    Raises
+    ------
+    ValueError
+        If ``quantile`` is outside (0, 1], any headcount is negative, or the
+        room is never occupied.
+    """
+    headcount = np.asarray(headcount, dtype=float)
+    if not 0 < quantile <= 1:
+        raise ValueError("quantile must be in (0, 1]")
+    if (headcount < 0).any():
+        raise ValueError("headcount must be non-negative")
+    occupied = headcount[headcount > 0]
+    if occupied.size == 0:
+        raise ValueError("the room is never occupied")
+    return int(np.ceil(np.quantile(occupied, quantile)))
+
+
+def fallback_airflow(usual_headcount: np.ndarray, design_people: float, threshold: float,
+                     rate_per_person: float = RATE_PER_PERSON) -> np.ndarray:
+    """Outdoor air to supply while the headcount sensor is known to be dead.
+
+    Without a live reading the controller cannot see how many people are in
+    the room, so the fallback is sized to be safe rather than efficient: full
+    design air whenever the room is usually in use (its average headcount for
+    that time of the week exceeds ``threshold``), and none otherwise.
+
+    Parameters
+    ----------
+    usual_headcount : array_like
+        Average headcount for each step's time of the week, from past data.
+    design_people : float
+        Design occupancy, people (see :func:`design_occupancy`).
+    threshold : float
+        Average headcount above which the room counts as usually in use.
+    rate_per_person : float, default 10.0
+        Outdoor air per person, L/s.
+
+    Returns
+    -------
+    numpy.ndarray
+        Outdoor-air supply, L/s: ``rate_per_person * design_people`` or 0.
+
+    Raises
+    ------
+    ValueError
+        If ``usual_headcount``, ``design_people`` or ``threshold`` is negative.
+    """
+    usual_headcount = np.asarray(usual_headcount, dtype=float)
+    if (usual_headcount < 0).any() or design_people < 0 or threshold < 0:
+        raise ValueError("usual_headcount, design_people and threshold must be non-negative")
+    return np.where(usual_headcount > threshold, rate_per_person * design_people, 0.0)
+
+
 def steady_state_co2(rate_per_person: float = RATE_PER_PERSON, generation: float = CO2_GENERATION,
                      outdoor: float = OUTDOOR_CO2) -> float:
     """CO2 level a room settles at when supplied exactly ``rate_per_person``.
@@ -111,7 +188,7 @@ def simulate_co2(
         Outdoor-air supply in each time step, L/s (same length as ``people``).
     dt : float
         Time step, seconds.
-    volume : float, default 81.0
+    volume : float, default 810.0
         Room volume, m3.
     generation : float, default 0.0052
         CO2 generated per person, L/s.

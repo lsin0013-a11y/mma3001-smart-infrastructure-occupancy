@@ -46,6 +46,9 @@
                     <a class="variable" href="#ROOM_AREA">ROOM_AREA</a>
             </li>
             <li>
+                    <a class="variable" href="#DESIGN_QUANTILE">DESIGN_QUANTILE</a>
+            </li>
+            <li>
                     <a class="variable" href="#ROOM_HEIGHT">ROOM_HEIGHT</a>
             </li>
             <li>
@@ -56,6 +59,12 @@
             </li>
             <li>
                     <a class="function" href="#required_airflow">required_airflow</a>
+            </li>
+            <li>
+                    <a class="function" href="#design_occupancy">design_occupancy</a>
+            </li>
+            <li>
+                    <a class="function" href="#fallback_airflow">fallback_airflow</a>
             </li>
             <li>
                     <a class="function" href="#steady_state_co2">steady_state_co2</a>
@@ -149,172 +158,249 @@ while Q dt / V &lt; 2, and only accurate when Q dt / V is much smaller than 1.</
 </span><span id="L-37"><a href="#L-37"><span class="linenos"> 37</span></a><span class="n">CO2_LIMIT</span> <span class="o">=</span> <span class="mf">1000.0</span>
 </span><span id="L-38"><a href="#L-38"><span class="linenos"> 38</span></a><span class="sd">&quot;&quot;&quot;Indoor CO2 level used as the air-quality threshold, ppm.&quot;&quot;&quot;</span>
 </span><span id="L-39"><a href="#L-39"><span class="linenos"> 39</span></a>
-</span><span id="L-40"><a href="#L-40"><span class="linenos"> 40</span></a><span class="n">ROOM_AREA</span> <span class="o">=</span> <span class="mf">30.0</span>
-</span><span id="L-41"><a href="#L-41"><span class="linenos"> 41</span></a><span class="sd">&quot;&quot;&quot;Floor area of G.20, m2 (the student&#39;s estimate: about 5 m by 6 m).&quot;&quot;&quot;</span>
+</span><span id="L-40"><a href="#L-40"><span class="linenos"> 40</span></a><span class="n">ROOM_AREA</span> <span class="o">=</span> <span class="mf">300.0</span>
+</span><span id="L-41"><a href="#L-41"><span class="linenos"> 41</span></a><span class="sd">&quot;&quot;&quot;Floor area of G.20, m2 (the student&#39;s estimate: about 20 m by 15 m).&quot;&quot;&quot;</span>
 </span><span id="L-42"><a href="#L-42"><span class="linenos"> 42</span></a>
-</span><span id="L-43"><a href="#L-43"><span class="linenos"> 43</span></a><span class="n">ROOM_HEIGHT</span> <span class="o">=</span> <span class="mf">2.7</span>
-</span><span id="L-44"><a href="#L-44"><span class="linenos"> 44</span></a><span class="sd">&quot;&quot;&quot;Ceiling height of G.20, m (assumed).&quot;&quot;&quot;</span>
+</span><span id="L-43"><a href="#L-43"><span class="linenos"> 43</span></a><span class="n">DESIGN_QUANTILE</span> <span class="o">=</span> <span class="mf">0.999</span>
+</span><span id="L-44"><a href="#L-44"><span class="linenos"> 44</span></a><span class="sd">&quot;&quot;&quot;Quantile of the occupied-time headcount that the design occupancy covers.&quot;&quot;&quot;</span>
 </span><span id="L-45"><a href="#L-45"><span class="linenos"> 45</span></a>
-</span><span id="L-46"><a href="#L-46"><span class="linenos"> 46</span></a><span class="n">INFILTRATION_ACH</span> <span class="o">=</span> <span class="mf">0.3</span>
-</span><span id="L-47"><a href="#L-47"><span class="linenos"> 47</span></a><span class="sd">&quot;&quot;&quot;Background outdoor air leaking in through the building envelope, air</span>
-</span><span id="L-48"><a href="#L-48"><span class="linenos"> 48</span></a><span class="sd">changes per hour (assumed; the room has few operable windows). It flows even</span>
-</span><span id="L-49"><a href="#L-49"><span class="linenos"> 49</span></a><span class="sd">when the ventilation is off.&quot;&quot;&quot;</span>
-</span><span id="L-50"><a href="#L-50"><span class="linenos"> 50</span></a>
-</span><span id="L-51"><a href="#L-51"><span class="linenos"> 51</span></a>
-</span><span id="L-52"><a href="#L-52"><span class="linenos"> 52</span></a><span class="k">def</span><span class="w"> </span><span class="nf">infiltration_airflow</span><span class="p">(</span><span class="n">ach</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">INFILTRATION_ACH</span><span class="p">,</span> <span class="n">volume</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">ROOM_AREA</span> <span class="o">*</span> <span class="n">ROOM_HEIGHT</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-</span><span id="L-53"><a href="#L-53"><span class="linenos"> 53</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert air changes per hour to an airflow in L/s (volume x ACH / 3.6).&quot;&quot;&quot;</span>
-</span><span id="L-54"><a href="#L-54"><span class="linenos"> 54</span></a>    <span class="k">return</span> <span class="n">ach</span> <span class="o">*</span> <span class="n">volume</span> <span class="o">/</span> <span class="mf">3.6</span>
-</span><span id="L-55"><a href="#L-55"><span class="linenos"> 55</span></a>
-</span><span id="L-56"><a href="#L-56"><span class="linenos"> 56</span></a>
-</span><span id="L-57"><a href="#L-57"><span class="linenos"> 57</span></a><span class="k">def</span><span class="w"> </span><span class="nf">required_airflow</span><span class="p">(</span><span class="n">people</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">rate_per_person</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">RATE_PER_PERSON</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
-</span><span id="L-58"><a href="#L-58"><span class="linenos"> 58</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Outdoor air needed for the people present.</span>
+</span><span id="L-46"><a href="#L-46"><span class="linenos"> 46</span></a><span class="n">ROOM_HEIGHT</span> <span class="o">=</span> <span class="mf">2.7</span>
+</span><span id="L-47"><a href="#L-47"><span class="linenos"> 47</span></a><span class="sd">&quot;&quot;&quot;Ceiling height of G.20, m (assumed).&quot;&quot;&quot;</span>
+</span><span id="L-48"><a href="#L-48"><span class="linenos"> 48</span></a>
+</span><span id="L-49"><a href="#L-49"><span class="linenos"> 49</span></a><span class="n">INFILTRATION_ACH</span> <span class="o">=</span> <span class="mf">0.3</span>
+</span><span id="L-50"><a href="#L-50"><span class="linenos"> 50</span></a><span class="sd">&quot;&quot;&quot;Background outdoor air leaking in through the building envelope, air</span>
+</span><span id="L-51"><a href="#L-51"><span class="linenos"> 51</span></a><span class="sd">changes per hour (assumed; the room has few operable windows). It flows even</span>
+</span><span id="L-52"><a href="#L-52"><span class="linenos"> 52</span></a><span class="sd">when the ventilation is off.&quot;&quot;&quot;</span>
+</span><span id="L-53"><a href="#L-53"><span class="linenos"> 53</span></a>
+</span><span id="L-54"><a href="#L-54"><span class="linenos"> 54</span></a>
+</span><span id="L-55"><a href="#L-55"><span class="linenos"> 55</span></a><span class="k">def</span><span class="w"> </span><span class="nf">infiltration_airflow</span><span class="p">(</span><span class="n">ach</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">INFILTRATION_ACH</span><span class="p">,</span> <span class="n">volume</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">ROOM_AREA</span> <span class="o">*</span> <span class="n">ROOM_HEIGHT</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+</span><span id="L-56"><a href="#L-56"><span class="linenos"> 56</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert air changes per hour to an airflow in L/s (volume x ACH / 3.6).&quot;&quot;&quot;</span>
+</span><span id="L-57"><a href="#L-57"><span class="linenos"> 57</span></a>    <span class="k">return</span> <span class="n">ach</span> <span class="o">*</span> <span class="n">volume</span> <span class="o">/</span> <span class="mf">3.6</span>
+</span><span id="L-58"><a href="#L-58"><span class="linenos"> 58</span></a>
 </span><span id="L-59"><a href="#L-59"><span class="linenos"> 59</span></a>
-</span><span id="L-60"><a href="#L-60"><span class="linenos"> 60</span></a><span class="sd">    Parameters</span>
-</span><span id="L-61"><a href="#L-61"><span class="linenos"> 61</span></a><span class="sd">    ----------</span>
-</span><span id="L-62"><a href="#L-62"><span class="linenos"> 62</span></a><span class="sd">    people : array_like</span>
-</span><span id="L-63"><a href="#L-63"><span class="linenos"> 63</span></a><span class="sd">        Number of people (may be fractional, e.g. an interval&#39;s mean headcount).</span>
-</span><span id="L-64"><a href="#L-64"><span class="linenos"> 64</span></a><span class="sd">    rate_per_person : float, default 10.0</span>
-</span><span id="L-65"><a href="#L-65"><span class="linenos"> 65</span></a><span class="sd">        Outdoor air per person, L/s.</span>
-</span><span id="L-66"><a href="#L-66"><span class="linenos"> 66</span></a>
-</span><span id="L-67"><a href="#L-67"><span class="linenos"> 67</span></a><span class="sd">    Returns</span>
-</span><span id="L-68"><a href="#L-68"><span class="linenos"> 68</span></a><span class="sd">    -------</span>
-</span><span id="L-69"><a href="#L-69"><span class="linenos"> 69</span></a><span class="sd">    numpy.ndarray</span>
-</span><span id="L-70"><a href="#L-70"><span class="linenos"> 70</span></a><span class="sd">        Required outdoor-air supply, L/s.</span>
-</span><span id="L-71"><a href="#L-71"><span class="linenos"> 71</span></a>
-</span><span id="L-72"><a href="#L-72"><span class="linenos"> 72</span></a><span class="sd">    Raises</span>
-</span><span id="L-73"><a href="#L-73"><span class="linenos"> 73</span></a><span class="sd">    ------</span>
-</span><span id="L-74"><a href="#L-74"><span class="linenos"> 74</span></a><span class="sd">    ValueError</span>
-</span><span id="L-75"><a href="#L-75"><span class="linenos"> 75</span></a><span class="sd">        If any value of ``people`` is negative.</span>
-</span><span id="L-76"><a href="#L-76"><span class="linenos"> 76</span></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="L-77"><a href="#L-77"><span class="linenos"> 77</span></a>    <span class="n">people</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">people</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
-</span><span id="L-78"><a href="#L-78"><span class="linenos"> 78</span></a>    <span class="k">if</span> <span class="p">(</span><span class="n">people</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
-</span><span id="L-79"><a href="#L-79"><span class="linenos"> 79</span></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;people must be non-negative&quot;</span><span class="p">)</span>
-</span><span id="L-80"><a href="#L-80"><span class="linenos"> 80</span></a>    <span class="k">return</span> <span class="n">rate_per_person</span> <span class="o">*</span> <span class="n">people</span>
-</span><span id="L-81"><a href="#L-81"><span class="linenos"> 81</span></a>
-</span><span id="L-82"><a href="#L-82"><span class="linenos"> 82</span></a>
-</span><span id="L-83"><a href="#L-83"><span class="linenos"> 83</span></a><span class="k">def</span><span class="w"> </span><span class="nf">steady_state_co2</span><span class="p">(</span><span class="n">rate_per_person</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">RATE_PER_PERSON</span><span class="p">,</span> <span class="n">generation</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">CO2_GENERATION</span><span class="p">,</span>
-</span><span id="L-84"><a href="#L-84"><span class="linenos"> 84</span></a>                     <span class="n">outdoor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">OUTDOOR_CO2</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-</span><span id="L-85"><a href="#L-85"><span class="linenos"> 85</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;CO2 level a room settles at when supplied exactly ``rate_per_person``.</span>
-</span><span id="L-86"><a href="#L-86"><span class="linenos"> 86</span></a>
-</span><span id="L-87"><a href="#L-87"><span class="linenos"> 87</span></a><span class="sd">    With Q = rate x N, the steady state C_out + G N / Q does not depend on N.</span>
-</span><span id="L-88"><a href="#L-88"><span class="linenos"> 88</span></a><span class="sd">    At 10 L/s per person it is 420 + 0.0052 / 10 x 1e6 = 940 ppm, just under</span>
-</span><span id="L-89"><a href="#L-89"><span class="linenos"> 89</span></a><span class="sd">    the 1000 ppm limit, which is why that rate is a common design value.</span>
-</span><span id="L-90"><a href="#L-90"><span class="linenos"> 90</span></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="L-91"><a href="#L-91"><span class="linenos"> 91</span></a>    <span class="k">return</span> <span class="n">outdoor</span> <span class="o">+</span> <span class="n">generation</span> <span class="o">/</span> <span class="n">rate_per_person</span> <span class="o">*</span> <span class="mf">1e6</span>
-</span><span id="L-92"><a href="#L-92"><span class="linenos"> 92</span></a>
+</span><span id="L-60"><a href="#L-60"><span class="linenos"> 60</span></a><span class="k">def</span><span class="w"> </span><span class="nf">required_airflow</span><span class="p">(</span><span class="n">people</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">rate_per_person</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">RATE_PER_PERSON</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+</span><span id="L-61"><a href="#L-61"><span class="linenos"> 61</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Outdoor air needed for the people present.</span>
+</span><span id="L-62"><a href="#L-62"><span class="linenos"> 62</span></a>
+</span><span id="L-63"><a href="#L-63"><span class="linenos"> 63</span></a><span class="sd">    Parameters</span>
+</span><span id="L-64"><a href="#L-64"><span class="linenos"> 64</span></a><span class="sd">    ----------</span>
+</span><span id="L-65"><a href="#L-65"><span class="linenos"> 65</span></a><span class="sd">    people : array_like</span>
+</span><span id="L-66"><a href="#L-66"><span class="linenos"> 66</span></a><span class="sd">        Number of people (may be fractional, e.g. an interval&#39;s mean headcount).</span>
+</span><span id="L-67"><a href="#L-67"><span class="linenos"> 67</span></a><span class="sd">    rate_per_person : float, default 10.0</span>
+</span><span id="L-68"><a href="#L-68"><span class="linenos"> 68</span></a><span class="sd">        Outdoor air per person, L/s.</span>
+</span><span id="L-69"><a href="#L-69"><span class="linenos"> 69</span></a>
+</span><span id="L-70"><a href="#L-70"><span class="linenos"> 70</span></a><span class="sd">    Returns</span>
+</span><span id="L-71"><a href="#L-71"><span class="linenos"> 71</span></a><span class="sd">    -------</span>
+</span><span id="L-72"><a href="#L-72"><span class="linenos"> 72</span></a><span class="sd">    numpy.ndarray</span>
+</span><span id="L-73"><a href="#L-73"><span class="linenos"> 73</span></a><span class="sd">        Required outdoor-air supply, L/s.</span>
+</span><span id="L-74"><a href="#L-74"><span class="linenos"> 74</span></a>
+</span><span id="L-75"><a href="#L-75"><span class="linenos"> 75</span></a><span class="sd">    Raises</span>
+</span><span id="L-76"><a href="#L-76"><span class="linenos"> 76</span></a><span class="sd">    ------</span>
+</span><span id="L-77"><a href="#L-77"><span class="linenos"> 77</span></a><span class="sd">    ValueError</span>
+</span><span id="L-78"><a href="#L-78"><span class="linenos"> 78</span></a><span class="sd">        If any value of ``people`` is negative.</span>
+</span><span id="L-79"><a href="#L-79"><span class="linenos"> 79</span></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="L-80"><a href="#L-80"><span class="linenos"> 80</span></a>    <span class="n">people</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">people</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+</span><span id="L-81"><a href="#L-81"><span class="linenos"> 81</span></a>    <span class="k">if</span> <span class="p">(</span><span class="n">people</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
+</span><span id="L-82"><a href="#L-82"><span class="linenos"> 82</span></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;people must be non-negative&quot;</span><span class="p">)</span>
+</span><span id="L-83"><a href="#L-83"><span class="linenos"> 83</span></a>    <span class="k">return</span> <span class="n">rate_per_person</span> <span class="o">*</span> <span class="n">people</span>
+</span><span id="L-84"><a href="#L-84"><span class="linenos"> 84</span></a>
+</span><span id="L-85"><a href="#L-85"><span class="linenos"> 85</span></a>
+</span><span id="L-86"><a href="#L-86"><span class="linenos"> 86</span></a><span class="k">def</span><span class="w"> </span><span class="nf">design_occupancy</span><span class="p">(</span><span class="n">headcount</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">quantile</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">DESIGN_QUANTILE</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+</span><span id="L-87"><a href="#L-87"><span class="linenos"> 87</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Number of people a fixed ventilation design is sized for.</span>
+</span><span id="L-88"><a href="#L-88"><span class="linenos"> 88</span></a>
+</span><span id="L-89"><a href="#L-89"><span class="linenos"> 89</span></a><span class="sd">    The ``quantile`` of the headcount over occupied time, rounded up to whole</span>
+</span><span id="L-90"><a href="#L-90"><span class="linenos"> 90</span></a><span class="sd">    people. Sizing for the very highest reading would let one brief crowd (or</span>
+</span><span id="L-91"><a href="#L-91"><span class="linenos"> 91</span></a><span class="sd">    sensor glitch) set the airflow for every hour of the year; the 99.9th</span>
+</span><span id="L-92"><a href="#L-92"><span class="linenos"> 92</span></a><span class="sd">    percentile covers all but the rarest peaks.</span>
 </span><span id="L-93"><a href="#L-93"><span class="linenos"> 93</span></a>
-</span><span id="L-94"><a href="#L-94"><span class="linenos"> 94</span></a><span class="k">def</span><span class="w"> </span><span class="nf">simulate_co2</span><span class="p">(</span>
-</span><span id="L-95"><a href="#L-95"><span class="linenos"> 95</span></a>    <span class="n">people</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
-</span><span id="L-96"><a href="#L-96"><span class="linenos"> 96</span></a>    <span class="n">airflow</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
-</span><span id="L-97"><a href="#L-97"><span class="linenos"> 97</span></a>    <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
-</span><span id="L-98"><a href="#L-98"><span class="linenos"> 98</span></a>    <span class="n">volume</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">ROOM_AREA</span> <span class="o">*</span> <span class="n">ROOM_HEIGHT</span><span class="p">,</span>
-</span><span id="L-99"><a href="#L-99"><span class="linenos"> 99</span></a>    <span class="n">generation</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">CO2_GENERATION</span><span class="p">,</span>
-</span><span id="L-100"><a href="#L-100"><span class="linenos">100</span></a>    <span class="n">outdoor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">OUTDOOR_CO2</span><span class="p">,</span>
-</span><span id="L-101"><a href="#L-101"><span class="linenos">101</span></a>    <span class="n">initial</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="L-102"><a href="#L-102"><span class="linenos">102</span></a>    <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;exact&quot;</span><span class="p">,</span>
-</span><span id="L-103"><a href="#L-103"><span class="linenos">103</span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
-</span><span id="L-104"><a href="#L-104"><span class="linenos">104</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Simulate indoor CO2 for piecewise-constant occupancy and airflow.</span>
-</span><span id="L-105"><a href="#L-105"><span class="linenos">105</span></a>
-</span><span id="L-106"><a href="#L-106"><span class="linenos">106</span></a><span class="sd">    Parameters</span>
-</span><span id="L-107"><a href="#L-107"><span class="linenos">107</span></a><span class="sd">    ----------</span>
-</span><span id="L-108"><a href="#L-108"><span class="linenos">108</span></a><span class="sd">    people : array_like</span>
-</span><span id="L-109"><a href="#L-109"><span class="linenos">109</span></a><span class="sd">        People present in each time step.</span>
-</span><span id="L-110"><a href="#L-110"><span class="linenos">110</span></a><span class="sd">    airflow : array_like</span>
-</span><span id="L-111"><a href="#L-111"><span class="linenos">111</span></a><span class="sd">        Outdoor-air supply in each time step, L/s (same length as ``people``).</span>
-</span><span id="L-112"><a href="#L-112"><span class="linenos">112</span></a><span class="sd">    dt : float</span>
-</span><span id="L-113"><a href="#L-113"><span class="linenos">113</span></a><span class="sd">        Time step, seconds.</span>
-</span><span id="L-114"><a href="#L-114"><span class="linenos">114</span></a><span class="sd">    volume : float, default 81.0</span>
-</span><span id="L-115"><a href="#L-115"><span class="linenos">115</span></a><span class="sd">        Room volume, m3.</span>
-</span><span id="L-116"><a href="#L-116"><span class="linenos">116</span></a><span class="sd">    generation : float, default 0.0052</span>
-</span><span id="L-117"><a href="#L-117"><span class="linenos">117</span></a><span class="sd">        CO2 generated per person, L/s.</span>
-</span><span id="L-118"><a href="#L-118"><span class="linenos">118</span></a><span class="sd">    outdoor : float, default 420.0</span>
-</span><span id="L-119"><a href="#L-119"><span class="linenos">119</span></a><span class="sd">        Outdoor CO2, ppm.</span>
-</span><span id="L-120"><a href="#L-120"><span class="linenos">120</span></a><span class="sd">    initial : float, optional</span>
-</span><span id="L-121"><a href="#L-121"><span class="linenos">121</span></a><span class="sd">        CO2 at the start, ppm. Defaults to ``outdoor``.</span>
-</span><span id="L-122"><a href="#L-122"><span class="linenos">122</span></a><span class="sd">    method : {&quot;exact&quot;, &quot;euler&quot;}, default &quot;exact&quot;</span>
-</span><span id="L-123"><a href="#L-123"><span class="linenos">123</span></a><span class="sd">        ``&quot;exact&quot;`` uses the analytical solution within each step;</span>
-</span><span id="L-124"><a href="#L-124"><span class="linenos">124</span></a><span class="sd">        ``&quot;euler&quot;`` uses the explicit Euler method.</span>
-</span><span id="L-125"><a href="#L-125"><span class="linenos">125</span></a>
-</span><span id="L-126"><a href="#L-126"><span class="linenos">126</span></a><span class="sd">    Returns</span>
-</span><span id="L-127"><a href="#L-127"><span class="linenos">127</span></a><span class="sd">    -------</span>
-</span><span id="L-128"><a href="#L-128"><span class="linenos">128</span></a><span class="sd">    numpy.ndarray</span>
-</span><span id="L-129"><a href="#L-129"><span class="linenos">129</span></a><span class="sd">        CO2 at the end of each step, ppm (same length as ``people``).</span>
-</span><span id="L-130"><a href="#L-130"><span class="linenos">130</span></a>
-</span><span id="L-131"><a href="#L-131"><span class="linenos">131</span></a><span class="sd">    Raises</span>
-</span><span id="L-132"><a href="#L-132"><span class="linenos">132</span></a><span class="sd">    ------</span>
-</span><span id="L-133"><a href="#L-133"><span class="linenos">133</span></a><span class="sd">    ValueError</span>
-</span><span id="L-134"><a href="#L-134"><span class="linenos">134</span></a><span class="sd">        If the inputs differ in length, contain negative values, ``dt`` or</span>
-</span><span id="L-135"><a href="#L-135"><span class="linenos">135</span></a><span class="sd">        ``volume`` is not positive, or ``method`` is unknown.</span>
-</span><span id="L-136"><a href="#L-136"><span class="linenos">136</span></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="L-137"><a href="#L-137"><span class="linenos">137</span></a>    <span class="n">people</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">people</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
-</span><span id="L-138"><a href="#L-138"><span class="linenos">138</span></a>    <span class="n">q</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">airflow</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span> <span class="o">/</span> <span class="mf">1000.0</span>           <span class="c1"># m3/s</span>
-</span><span id="L-139"><a href="#L-139"><span class="linenos">139</span></a>    <span class="k">if</span> <span class="n">people</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="n">q</span><span class="o">.</span><span class="n">shape</span><span class="p">:</span>
-</span><span id="L-140"><a href="#L-140"><span class="linenos">140</span></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;people and airflow must have the same length&quot;</span><span class="p">)</span>
-</span><span id="L-141"><a href="#L-141"><span class="linenos">141</span></a>    <span class="k">if</span> <span class="p">(</span><span class="n">people</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">()</span> <span class="ow">or</span> <span class="p">(</span><span class="n">q</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
-</span><span id="L-142"><a href="#L-142"><span class="linenos">142</span></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;people and airflow must be non-negative&quot;</span><span class="p">)</span>
-</span><span id="L-143"><a href="#L-143"><span class="linenos">143</span></a>    <span class="k">if</span> <span class="n">dt</span> <span class="o">&lt;=</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">volume</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
-</span><span id="L-144"><a href="#L-144"><span class="linenos">144</span></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;dt and volume must be positive&quot;</span><span class="p">)</span>
-</span><span id="L-145"><a href="#L-145"><span class="linenos">145</span></a>    <span class="k">if</span> <span class="n">method</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;exact&quot;</span><span class="p">,</span> <span class="s2">&quot;euler&quot;</span><span class="p">):</span>
-</span><span id="L-146"><a href="#L-146"><span class="linenos">146</span></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown method &#39;</span><span class="si">{</span><span class="n">method</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
-</span><span id="L-147"><a href="#L-147"><span class="linenos">147</span></a>
-</span><span id="L-148"><a href="#L-148"><span class="linenos">148</span></a>    <span class="n">source</span> <span class="o">=</span> <span class="n">generation</span> <span class="o">/</span> <span class="mf">1000.0</span> <span class="o">*</span> <span class="n">people</span> <span class="o">*</span> <span class="mf">1e6</span>               <span class="c1"># ppm * m3/s added by occupants</span>
-</span><span id="L-149"><a href="#L-149"><span class="linenos">149</span></a>    <span class="n">c</span> <span class="o">=</span> <span class="n">outdoor</span> <span class="k">if</span> <span class="n">initial</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="nb">float</span><span class="p">(</span><span class="n">initial</span><span class="p">)</span>
-</span><span id="L-150"><a href="#L-150"><span class="linenos">150</span></a>    <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">people</span><span class="p">))</span>
-</span><span id="L-151"><a href="#L-151"><span class="linenos">151</span></a>    <span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">&quot;euler&quot;</span><span class="p">:</span>
-</span><span id="L-152"><a href="#L-152"><span class="linenos">152</span></a>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">people</span><span class="p">)):</span>
-</span><span id="L-153"><a href="#L-153"><span class="linenos">153</span></a>            <span class="n">c</span> <span class="o">+=</span> <span class="n">dt</span> <span class="o">*</span> <span class="p">(</span><span class="n">source</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="n">q</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="n">outdoor</span> <span class="o">-</span> <span class="n">c</span><span class="p">))</span> <span class="o">/</span> <span class="n">volume</span>
-</span><span id="L-154"><a href="#L-154"><span class="linenos">154</span></a>            <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">c</span>
-</span><span id="L-155"><a href="#L-155"><span class="linenos">155</span></a>        <span class="k">return</span> <span class="n">out</span>
-</span><span id="L-156"><a href="#L-156"><span class="linenos">156</span></a>
-</span><span id="L-157"><a href="#L-157"><span class="linenos">157</span></a>    <span class="c1"># Exact solution of the linear ODE over each step; decay factor precomputed.</span>
-</span><span id="L-158"><a href="#L-158"><span class="linenos">158</span></a>    <span class="n">decay</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">q</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">/</span> <span class="n">volume</span><span class="p">)</span>
-</span><span id="L-159"><a href="#L-159"><span class="linenos">159</span></a>    <span class="k">with</span> <span class="n">np</span><span class="o">.</span><span class="n">errstate</span><span class="p">(</span><span class="n">divide</span><span class="o">=</span><span class="s2">&quot;ignore&quot;</span><span class="p">,</span> <span class="n">invalid</span><span class="o">=</span><span class="s2">&quot;ignore&quot;</span><span class="p">):</span>
-</span><span id="L-160"><a href="#L-160"><span class="linenos">160</span></a>        <span class="n">steady</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">q</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="n">outdoor</span> <span class="o">+</span> <span class="n">source</span> <span class="o">/</span> <span class="n">q</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">)</span>
-</span><span id="L-161"><a href="#L-161"><span class="linenos">161</span></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">people</span><span class="p">)):</span>
-</span><span id="L-162"><a href="#L-162"><span class="linenos">162</span></a>        <span class="n">c</span> <span class="o">=</span> <span class="n">steady</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="p">(</span><span class="n">c</span> <span class="o">-</span> <span class="n">steady</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">*</span> <span class="n">decay</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">if</span> <span class="n">q</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="n">c</span> <span class="o">+</span> <span class="n">source</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">/</span> <span class="n">volume</span>
-</span><span id="L-163"><a href="#L-163"><span class="linenos">163</span></a>        <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">c</span>
-</span><span id="L-164"><a href="#L-164"><span class="linenos">164</span></a>    <span class="k">return</span> <span class="n">out</span>
-</span><span id="L-165"><a href="#L-165"><span class="linenos">165</span></a>
-</span><span id="L-166"><a href="#L-166"><span class="linenos">166</span></a>
-</span><span id="L-167"><a href="#L-167"><span class="linenos">167</span></a><span class="k">def</span><span class="w"> </span><span class="nf">assess</span><span class="p">(</span><span class="n">people</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">airflow</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">co2</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
-</span><span id="L-168"><a href="#L-168"><span class="linenos">168</span></a>           <span class="n">limit</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">CO2_LIMIT</span><span class="p">,</span> <span class="n">mask</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
-</span><span id="L-169"><a href="#L-169"><span class="linenos">169</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Energy and air-quality measures of a ventilation strategy.</span>
+</span><span id="L-94"><a href="#L-94"><span class="linenos"> 94</span></a><span class="sd">    Parameters</span>
+</span><span id="L-95"><a href="#L-95"><span class="linenos"> 95</span></a><span class="sd">    ----------</span>
+</span><span id="L-96"><a href="#L-96"><span class="linenos"> 96</span></a><span class="sd">    headcount : array_like</span>
+</span><span id="L-97"><a href="#L-97"><span class="linenos"> 97</span></a><span class="sd">        Headcount per equal time step (e.g. 1-min means). Zeros (empty room)</span>
+</span><span id="L-98"><a href="#L-98"><span class="linenos"> 98</span></a><span class="sd">        are ignored.</span>
+</span><span id="L-99"><a href="#L-99"><span class="linenos"> 99</span></a><span class="sd">    quantile : float, default 0.999</span>
+</span><span id="L-100"><a href="#L-100"><span class="linenos">100</span></a><span class="sd">        Share of occupied time the design covers, between 0 and 1.</span>
+</span><span id="L-101"><a href="#L-101"><span class="linenos">101</span></a>
+</span><span id="L-102"><a href="#L-102"><span class="linenos">102</span></a><span class="sd">    Returns</span>
+</span><span id="L-103"><a href="#L-103"><span class="linenos">103</span></a><span class="sd">    -------</span>
+</span><span id="L-104"><a href="#L-104"><span class="linenos">104</span></a><span class="sd">    int</span>
+</span><span id="L-105"><a href="#L-105"><span class="linenos">105</span></a><span class="sd">        Design occupancy, people.</span>
+</span><span id="L-106"><a href="#L-106"><span class="linenos">106</span></a>
+</span><span id="L-107"><a href="#L-107"><span class="linenos">107</span></a><span class="sd">    Raises</span>
+</span><span id="L-108"><a href="#L-108"><span class="linenos">108</span></a><span class="sd">    ------</span>
+</span><span id="L-109"><a href="#L-109"><span class="linenos">109</span></a><span class="sd">    ValueError</span>
+</span><span id="L-110"><a href="#L-110"><span class="linenos">110</span></a><span class="sd">        If ``quantile`` is outside (0, 1], any headcount is negative, or the</span>
+</span><span id="L-111"><a href="#L-111"><span class="linenos">111</span></a><span class="sd">        room is never occupied.</span>
+</span><span id="L-112"><a href="#L-112"><span class="linenos">112</span></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="L-113"><a href="#L-113"><span class="linenos">113</span></a>    <span class="n">headcount</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">headcount</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+</span><span id="L-114"><a href="#L-114"><span class="linenos">114</span></a>    <span class="k">if</span> <span class="ow">not</span> <span class="mi">0</span> <span class="o">&lt;</span> <span class="n">quantile</span> <span class="o">&lt;=</span> <span class="mi">1</span><span class="p">:</span>
+</span><span id="L-115"><a href="#L-115"><span class="linenos">115</span></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;quantile must be in (0, 1]&quot;</span><span class="p">)</span>
+</span><span id="L-116"><a href="#L-116"><span class="linenos">116</span></a>    <span class="k">if</span> <span class="p">(</span><span class="n">headcount</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
+</span><span id="L-117"><a href="#L-117"><span class="linenos">117</span></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;headcount must be non-negative&quot;</span><span class="p">)</span>
+</span><span id="L-118"><a href="#L-118"><span class="linenos">118</span></a>    <span class="n">occupied</span> <span class="o">=</span> <span class="n">headcount</span><span class="p">[</span><span class="n">headcount</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">]</span>
+</span><span id="L-119"><a href="#L-119"><span class="linenos">119</span></a>    <span class="k">if</span> <span class="n">occupied</span><span class="o">.</span><span class="n">size</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+</span><span id="L-120"><a href="#L-120"><span class="linenos">120</span></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;the room is never occupied&quot;</span><span class="p">)</span>
+</span><span id="L-121"><a href="#L-121"><span class="linenos">121</span></a>    <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">quantile</span><span class="p">(</span><span class="n">occupied</span><span class="p">,</span> <span class="n">quantile</span><span class="p">)))</span>
+</span><span id="L-122"><a href="#L-122"><span class="linenos">122</span></a>
+</span><span id="L-123"><a href="#L-123"><span class="linenos">123</span></a>
+</span><span id="L-124"><a href="#L-124"><span class="linenos">124</span></a><span class="k">def</span><span class="w"> </span><span class="nf">fallback_airflow</span><span class="p">(</span><span class="n">usual_headcount</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">design_people</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">threshold</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+</span><span id="L-125"><a href="#L-125"><span class="linenos">125</span></a>                     <span class="n">rate_per_person</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">RATE_PER_PERSON</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+</span><span id="L-126"><a href="#L-126"><span class="linenos">126</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Outdoor air to supply while the headcount sensor is known to be dead.</span>
+</span><span id="L-127"><a href="#L-127"><span class="linenos">127</span></a>
+</span><span id="L-128"><a href="#L-128"><span class="linenos">128</span></a><span class="sd">    Without a live reading the controller cannot see how many people are in</span>
+</span><span id="L-129"><a href="#L-129"><span class="linenos">129</span></a><span class="sd">    the room, so the fallback is sized to be safe rather than efficient: full</span>
+</span><span id="L-130"><a href="#L-130"><span class="linenos">130</span></a><span class="sd">    design air whenever the room is usually in use (its average headcount for</span>
+</span><span id="L-131"><a href="#L-131"><span class="linenos">131</span></a><span class="sd">    that time of the week exceeds ``threshold``), and none otherwise.</span>
+</span><span id="L-132"><a href="#L-132"><span class="linenos">132</span></a>
+</span><span id="L-133"><a href="#L-133"><span class="linenos">133</span></a><span class="sd">    Parameters</span>
+</span><span id="L-134"><a href="#L-134"><span class="linenos">134</span></a><span class="sd">    ----------</span>
+</span><span id="L-135"><a href="#L-135"><span class="linenos">135</span></a><span class="sd">    usual_headcount : array_like</span>
+</span><span id="L-136"><a href="#L-136"><span class="linenos">136</span></a><span class="sd">        Average headcount for each step&#39;s time of the week, from past data.</span>
+</span><span id="L-137"><a href="#L-137"><span class="linenos">137</span></a><span class="sd">    design_people : float</span>
+</span><span id="L-138"><a href="#L-138"><span class="linenos">138</span></a><span class="sd">        Design occupancy, people (see :func:`design_occupancy`).</span>
+</span><span id="L-139"><a href="#L-139"><span class="linenos">139</span></a><span class="sd">    threshold : float</span>
+</span><span id="L-140"><a href="#L-140"><span class="linenos">140</span></a><span class="sd">        Average headcount above which the room counts as usually in use.</span>
+</span><span id="L-141"><a href="#L-141"><span class="linenos">141</span></a><span class="sd">    rate_per_person : float, default 10.0</span>
+</span><span id="L-142"><a href="#L-142"><span class="linenos">142</span></a><span class="sd">        Outdoor air per person, L/s.</span>
+</span><span id="L-143"><a href="#L-143"><span class="linenos">143</span></a>
+</span><span id="L-144"><a href="#L-144"><span class="linenos">144</span></a><span class="sd">    Returns</span>
+</span><span id="L-145"><a href="#L-145"><span class="linenos">145</span></a><span class="sd">    -------</span>
+</span><span id="L-146"><a href="#L-146"><span class="linenos">146</span></a><span class="sd">    numpy.ndarray</span>
+</span><span id="L-147"><a href="#L-147"><span class="linenos">147</span></a><span class="sd">        Outdoor-air supply, L/s: ``rate_per_person * design_people`` or 0.</span>
+</span><span id="L-148"><a href="#L-148"><span class="linenos">148</span></a>
+</span><span id="L-149"><a href="#L-149"><span class="linenos">149</span></a><span class="sd">    Raises</span>
+</span><span id="L-150"><a href="#L-150"><span class="linenos">150</span></a><span class="sd">    ------</span>
+</span><span id="L-151"><a href="#L-151"><span class="linenos">151</span></a><span class="sd">    ValueError</span>
+</span><span id="L-152"><a href="#L-152"><span class="linenos">152</span></a><span class="sd">        If ``usual_headcount``, ``design_people`` or ``threshold`` is negative.</span>
+</span><span id="L-153"><a href="#L-153"><span class="linenos">153</span></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="L-154"><a href="#L-154"><span class="linenos">154</span></a>    <span class="n">usual_headcount</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">usual_headcount</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+</span><span id="L-155"><a href="#L-155"><span class="linenos">155</span></a>    <span class="k">if</span> <span class="p">(</span><span class="n">usual_headcount</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">()</span> <span class="ow">or</span> <span class="n">design_people</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">threshold</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+</span><span id="L-156"><a href="#L-156"><span class="linenos">156</span></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;usual_headcount, design_people and threshold must be non-negative&quot;</span><span class="p">)</span>
+</span><span id="L-157"><a href="#L-157"><span class="linenos">157</span></a>    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">usual_headcount</span> <span class="o">&gt;</span> <span class="n">threshold</span><span class="p">,</span> <span class="n">rate_per_person</span> <span class="o">*</span> <span class="n">design_people</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
+</span><span id="L-158"><a href="#L-158"><span class="linenos">158</span></a>
+</span><span id="L-159"><a href="#L-159"><span class="linenos">159</span></a>
+</span><span id="L-160"><a href="#L-160"><span class="linenos">160</span></a><span class="k">def</span><span class="w"> </span><span class="nf">steady_state_co2</span><span class="p">(</span><span class="n">rate_per_person</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">RATE_PER_PERSON</span><span class="p">,</span> <span class="n">generation</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">CO2_GENERATION</span><span class="p">,</span>
+</span><span id="L-161"><a href="#L-161"><span class="linenos">161</span></a>                     <span class="n">outdoor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">OUTDOOR_CO2</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+</span><span id="L-162"><a href="#L-162"><span class="linenos">162</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;CO2 level a room settles at when supplied exactly ``rate_per_person``.</span>
+</span><span id="L-163"><a href="#L-163"><span class="linenos">163</span></a>
+</span><span id="L-164"><a href="#L-164"><span class="linenos">164</span></a><span class="sd">    With Q = rate x N, the steady state C_out + G N / Q does not depend on N.</span>
+</span><span id="L-165"><a href="#L-165"><span class="linenos">165</span></a><span class="sd">    At 10 L/s per person it is 420 + 0.0052 / 10 x 1e6 = 940 ppm, just under</span>
+</span><span id="L-166"><a href="#L-166"><span class="linenos">166</span></a><span class="sd">    the 1000 ppm limit, which is why that rate is a common design value.</span>
+</span><span id="L-167"><a href="#L-167"><span class="linenos">167</span></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="L-168"><a href="#L-168"><span class="linenos">168</span></a>    <span class="k">return</span> <span class="n">outdoor</span> <span class="o">+</span> <span class="n">generation</span> <span class="o">/</span> <span class="n">rate_per_person</span> <span class="o">*</span> <span class="mf">1e6</span>
+</span><span id="L-169"><a href="#L-169"><span class="linenos">169</span></a>
 </span><span id="L-170"><a href="#L-170"><span class="linenos">170</span></a>
-</span><span id="L-171"><a href="#L-171"><span class="linenos">171</span></a><span class="sd">    Parameters</span>
-</span><span id="L-172"><a href="#L-172"><span class="linenos">172</span></a><span class="sd">    ----------</span>
-</span><span id="L-173"><a href="#L-173"><span class="linenos">173</span></a><span class="sd">    people, airflow, co2 : array_like</span>
-</span><span id="L-174"><a href="#L-174"><span class="linenos">174</span></a><span class="sd">        People, outdoor-air supply (L/s) and simulated CO2 (ppm) per step.</span>
-</span><span id="L-175"><a href="#L-175"><span class="linenos">175</span></a><span class="sd">    dt : float</span>
-</span><span id="L-176"><a href="#L-176"><span class="linenos">176</span></a><span class="sd">        Time step, seconds.</span>
-</span><span id="L-177"><a href="#L-177"><span class="linenos">177</span></a><span class="sd">    limit : float, default 1000.0</span>
-</span><span id="L-178"><a href="#L-178"><span class="linenos">178</span></a><span class="sd">        CO2 threshold, ppm.</span>
-</span><span id="L-179"><a href="#L-179"><span class="linenos">179</span></a><span class="sd">    mask : array_like of bool, optional</span>
-</span><span id="L-180"><a href="#L-180"><span class="linenos">180</span></a><span class="sd">        Steps to include (e.g. excluding sensor outages). All if ``None``.</span>
-</span><span id="L-181"><a href="#L-181"><span class="linenos">181</span></a>
-</span><span id="L-182"><a href="#L-182"><span class="linenos">182</span></a><span class="sd">    Returns</span>
-</span><span id="L-183"><a href="#L-183"><span class="linenos">183</span></a><span class="sd">    -------</span>
-</span><span id="L-184"><a href="#L-184"><span class="linenos">184</span></a><span class="sd">    dict</span>
-</span><span id="L-185"><a href="#L-185"><span class="linenos">185</span></a><span class="sd">        - ``air_m3``: total outdoor air supplied, m3 (proxy for fan and</span>
-</span><span id="L-186"><a href="#L-186"><span class="linenos">186</span></a><span class="sd">          conditioning energy);</span>
-</span><span id="L-187"><a href="#L-187"><span class="linenos">187</span></a><span class="sd">        - ``required_m3``: outdoor air needed at the per-person rate, m3;</span>
-</span><span id="L-188"><a href="#L-188"><span class="linenos">188</span></a><span class="sd">        - ``person_hours_over_limit``: person-hours spent above ``limit``;</span>
-</span><span id="L-189"><a href="#L-189"><span class="linenos">189</span></a><span class="sd">        - ``share_occupied_time_over_limit``: share of occupied time above it;</span>
-</span><span id="L-190"><a href="#L-190"><span class="linenos">190</span></a><span class="sd">        - ``peak_ppm``: highest CO2 while occupied;</span>
-</span><span id="L-191"><a href="#L-191"><span class="linenos">191</span></a><span class="sd">        - ``mean_occupied_ppm``: mean CO2 while occupied.</span>
-</span><span id="L-192"><a href="#L-192"><span class="linenos">192</span></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="L-193"><a href="#L-193"><span class="linenos">193</span></a>    <span class="n">people</span><span class="p">,</span> <span class="n">airflow</span><span class="p">,</span> <span class="n">co2</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="p">(</span><span class="n">people</span><span class="p">,</span> <span class="n">airflow</span><span class="p">,</span> <span class="n">co2</span><span class="p">))</span>
-</span><span id="L-194"><a href="#L-194"><span class="linenos">194</span></a>    <span class="n">m</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">people</span><span class="p">),</span> <span class="nb">bool</span><span class="p">)</span> <span class="k">if</span> <span class="n">mask</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="nb">bool</span><span class="p">)</span>
-</span><span id="L-195"><a href="#L-195"><span class="linenos">195</span></a>    <span class="n">people</span><span class="p">,</span> <span class="n">airflow</span><span class="p">,</span> <span class="n">co2</span> <span class="o">=</span> <span class="n">people</span><span class="p">[</span><span class="n">m</span><span class="p">],</span> <span class="n">airflow</span><span class="p">[</span><span class="n">m</span><span class="p">],</span> <span class="n">co2</span><span class="p">[</span><span class="n">m</span><span class="p">]</span>
-</span><span id="L-196"><a href="#L-196"><span class="linenos">196</span></a>    <span class="n">occupied</span> <span class="o">=</span> <span class="n">people</span> <span class="o">&gt;</span> <span class="mi">0</span>
-</span><span id="L-197"><a href="#L-197"><span class="linenos">197</span></a>    <span class="n">over</span> <span class="o">=</span> <span class="n">co2</span> <span class="o">&gt;</span> <span class="n">limit</span>
-</span><span id="L-198"><a href="#L-198"><span class="linenos">198</span></a>    <span class="k">return</span> <span class="p">{</span>
-</span><span id="L-199"><a href="#L-199"><span class="linenos">199</span></a>        <span class="s2">&quot;air_m3&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">airflow</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">/</span> <span class="mf">1000.0</span><span class="p">),</span>
-</span><span id="L-200"><a href="#L-200"><span class="linenos">200</span></a>        <span class="s2">&quot;required_m3&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">required_airflow</span><span class="p">(</span><span class="n">people</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">/</span> <span class="mf">1000.0</span><span class="p">),</span>
-</span><span id="L-201"><a href="#L-201"><span class="linenos">201</span></a>        <span class="s2">&quot;person_hours_over_limit&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">((</span><span class="n">people</span> <span class="o">*</span> <span class="n">over</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">/</span> <span class="mf">3600.0</span><span class="p">),</span>
-</span><span id="L-202"><a href="#L-202"><span class="linenos">202</span></a>        <span class="s2">&quot;share_occupied_time_over_limit&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">((</span><span class="n">over</span> <span class="o">&amp;</span> <span class="n">occupied</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">/</span> <span class="nb">max</span><span class="p">(</span><span class="n">occupied</span><span class="o">.</span><span class="n">sum</span><span class="p">(),</span> <span class="mi">1</span><span class="p">)),</span>
-</span><span id="L-203"><a href="#L-203"><span class="linenos">203</span></a>        <span class="s2">&quot;peak_ppm&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">co2</span><span class="p">[</span><span class="n">occupied</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">())</span> <span class="k">if</span> <span class="n">occupied</span><span class="o">.</span><span class="n">any</span><span class="p">()</span> <span class="k">else</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;nan&quot;</span><span class="p">),</span>
-</span><span id="L-204"><a href="#L-204"><span class="linenos">204</span></a>        <span class="s2">&quot;mean_occupied_ppm&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">co2</span><span class="p">[</span><span class="n">occupied</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">())</span> <span class="k">if</span> <span class="n">occupied</span><span class="o">.</span><span class="n">any</span><span class="p">()</span> <span class="k">else</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;nan&quot;</span><span class="p">),</span>
-</span><span id="L-205"><a href="#L-205"><span class="linenos">205</span></a>    <span class="p">}</span>
+</span><span id="L-171"><a href="#L-171"><span class="linenos">171</span></a><span class="k">def</span><span class="w"> </span><span class="nf">simulate_co2</span><span class="p">(</span>
+</span><span id="L-172"><a href="#L-172"><span class="linenos">172</span></a>    <span class="n">people</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+</span><span id="L-173"><a href="#L-173"><span class="linenos">173</span></a>    <span class="n">airflow</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+</span><span id="L-174"><a href="#L-174"><span class="linenos">174</span></a>    <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+</span><span id="L-175"><a href="#L-175"><span class="linenos">175</span></a>    <span class="n">volume</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">ROOM_AREA</span> <span class="o">*</span> <span class="n">ROOM_HEIGHT</span><span class="p">,</span>
+</span><span id="L-176"><a href="#L-176"><span class="linenos">176</span></a>    <span class="n">generation</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">CO2_GENERATION</span><span class="p">,</span>
+</span><span id="L-177"><a href="#L-177"><span class="linenos">177</span></a>    <span class="n">outdoor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">OUTDOOR_CO2</span><span class="p">,</span>
+</span><span id="L-178"><a href="#L-178"><span class="linenos">178</span></a>    <span class="n">initial</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="L-179"><a href="#L-179"><span class="linenos">179</span></a>    <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;exact&quot;</span><span class="p">,</span>
+</span><span id="L-180"><a href="#L-180"><span class="linenos">180</span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+</span><span id="L-181"><a href="#L-181"><span class="linenos">181</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Simulate indoor CO2 for piecewise-constant occupancy and airflow.</span>
+</span><span id="L-182"><a href="#L-182"><span class="linenos">182</span></a>
+</span><span id="L-183"><a href="#L-183"><span class="linenos">183</span></a><span class="sd">    Parameters</span>
+</span><span id="L-184"><a href="#L-184"><span class="linenos">184</span></a><span class="sd">    ----------</span>
+</span><span id="L-185"><a href="#L-185"><span class="linenos">185</span></a><span class="sd">    people : array_like</span>
+</span><span id="L-186"><a href="#L-186"><span class="linenos">186</span></a><span class="sd">        People present in each time step.</span>
+</span><span id="L-187"><a href="#L-187"><span class="linenos">187</span></a><span class="sd">    airflow : array_like</span>
+</span><span id="L-188"><a href="#L-188"><span class="linenos">188</span></a><span class="sd">        Outdoor-air supply in each time step, L/s (same length as ``people``).</span>
+</span><span id="L-189"><a href="#L-189"><span class="linenos">189</span></a><span class="sd">    dt : float</span>
+</span><span id="L-190"><a href="#L-190"><span class="linenos">190</span></a><span class="sd">        Time step, seconds.</span>
+</span><span id="L-191"><a href="#L-191"><span class="linenos">191</span></a><span class="sd">    volume : float, default 810.0</span>
+</span><span id="L-192"><a href="#L-192"><span class="linenos">192</span></a><span class="sd">        Room volume, m3.</span>
+</span><span id="L-193"><a href="#L-193"><span class="linenos">193</span></a><span class="sd">    generation : float, default 0.0052</span>
+</span><span id="L-194"><a href="#L-194"><span class="linenos">194</span></a><span class="sd">        CO2 generated per person, L/s.</span>
+</span><span id="L-195"><a href="#L-195"><span class="linenos">195</span></a><span class="sd">    outdoor : float, default 420.0</span>
+</span><span id="L-196"><a href="#L-196"><span class="linenos">196</span></a><span class="sd">        Outdoor CO2, ppm.</span>
+</span><span id="L-197"><a href="#L-197"><span class="linenos">197</span></a><span class="sd">    initial : float, optional</span>
+</span><span id="L-198"><a href="#L-198"><span class="linenos">198</span></a><span class="sd">        CO2 at the start, ppm. Defaults to ``outdoor``.</span>
+</span><span id="L-199"><a href="#L-199"><span class="linenos">199</span></a><span class="sd">    method : {&quot;exact&quot;, &quot;euler&quot;}, default &quot;exact&quot;</span>
+</span><span id="L-200"><a href="#L-200"><span class="linenos">200</span></a><span class="sd">        ``&quot;exact&quot;`` uses the analytical solution within each step;</span>
+</span><span id="L-201"><a href="#L-201"><span class="linenos">201</span></a><span class="sd">        ``&quot;euler&quot;`` uses the explicit Euler method.</span>
+</span><span id="L-202"><a href="#L-202"><span class="linenos">202</span></a>
+</span><span id="L-203"><a href="#L-203"><span class="linenos">203</span></a><span class="sd">    Returns</span>
+</span><span id="L-204"><a href="#L-204"><span class="linenos">204</span></a><span class="sd">    -------</span>
+</span><span id="L-205"><a href="#L-205"><span class="linenos">205</span></a><span class="sd">    numpy.ndarray</span>
+</span><span id="L-206"><a href="#L-206"><span class="linenos">206</span></a><span class="sd">        CO2 at the end of each step, ppm (same length as ``people``).</span>
+</span><span id="L-207"><a href="#L-207"><span class="linenos">207</span></a>
+</span><span id="L-208"><a href="#L-208"><span class="linenos">208</span></a><span class="sd">    Raises</span>
+</span><span id="L-209"><a href="#L-209"><span class="linenos">209</span></a><span class="sd">    ------</span>
+</span><span id="L-210"><a href="#L-210"><span class="linenos">210</span></a><span class="sd">    ValueError</span>
+</span><span id="L-211"><a href="#L-211"><span class="linenos">211</span></a><span class="sd">        If the inputs differ in length, contain negative values, ``dt`` or</span>
+</span><span id="L-212"><a href="#L-212"><span class="linenos">212</span></a><span class="sd">        ``volume`` is not positive, or ``method`` is unknown.</span>
+</span><span id="L-213"><a href="#L-213"><span class="linenos">213</span></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="L-214"><a href="#L-214"><span class="linenos">214</span></a>    <span class="n">people</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">people</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+</span><span id="L-215"><a href="#L-215"><span class="linenos">215</span></a>    <span class="n">q</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">airflow</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span> <span class="o">/</span> <span class="mf">1000.0</span>           <span class="c1"># m3/s</span>
+</span><span id="L-216"><a href="#L-216"><span class="linenos">216</span></a>    <span class="k">if</span> <span class="n">people</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="n">q</span><span class="o">.</span><span class="n">shape</span><span class="p">:</span>
+</span><span id="L-217"><a href="#L-217"><span class="linenos">217</span></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;people and airflow must have the same length&quot;</span><span class="p">)</span>
+</span><span id="L-218"><a href="#L-218"><span class="linenos">218</span></a>    <span class="k">if</span> <span class="p">(</span><span class="n">people</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">()</span> <span class="ow">or</span> <span class="p">(</span><span class="n">q</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
+</span><span id="L-219"><a href="#L-219"><span class="linenos">219</span></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;people and airflow must be non-negative&quot;</span><span class="p">)</span>
+</span><span id="L-220"><a href="#L-220"><span class="linenos">220</span></a>    <span class="k">if</span> <span class="n">dt</span> <span class="o">&lt;=</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">volume</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+</span><span id="L-221"><a href="#L-221"><span class="linenos">221</span></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;dt and volume must be positive&quot;</span><span class="p">)</span>
+</span><span id="L-222"><a href="#L-222"><span class="linenos">222</span></a>    <span class="k">if</span> <span class="n">method</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;exact&quot;</span><span class="p">,</span> <span class="s2">&quot;euler&quot;</span><span class="p">):</span>
+</span><span id="L-223"><a href="#L-223"><span class="linenos">223</span></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown method &#39;</span><span class="si">{</span><span class="n">method</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+</span><span id="L-224"><a href="#L-224"><span class="linenos">224</span></a>
+</span><span id="L-225"><a href="#L-225"><span class="linenos">225</span></a>    <span class="n">source</span> <span class="o">=</span> <span class="n">generation</span> <span class="o">/</span> <span class="mf">1000.0</span> <span class="o">*</span> <span class="n">people</span> <span class="o">*</span> <span class="mf">1e6</span>               <span class="c1"># ppm * m3/s added by occupants</span>
+</span><span id="L-226"><a href="#L-226"><span class="linenos">226</span></a>    <span class="n">c</span> <span class="o">=</span> <span class="n">outdoor</span> <span class="k">if</span> <span class="n">initial</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="nb">float</span><span class="p">(</span><span class="n">initial</span><span class="p">)</span>
+</span><span id="L-227"><a href="#L-227"><span class="linenos">227</span></a>    <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">people</span><span class="p">))</span>
+</span><span id="L-228"><a href="#L-228"><span class="linenos">228</span></a>    <span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">&quot;euler&quot;</span><span class="p">:</span>
+</span><span id="L-229"><a href="#L-229"><span class="linenos">229</span></a>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">people</span><span class="p">)):</span>
+</span><span id="L-230"><a href="#L-230"><span class="linenos">230</span></a>            <span class="n">c</span> <span class="o">+=</span> <span class="n">dt</span> <span class="o">*</span> <span class="p">(</span><span class="n">source</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="n">q</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="n">outdoor</span> <span class="o">-</span> <span class="n">c</span><span class="p">))</span> <span class="o">/</span> <span class="n">volume</span>
+</span><span id="L-231"><a href="#L-231"><span class="linenos">231</span></a>            <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">c</span>
+</span><span id="L-232"><a href="#L-232"><span class="linenos">232</span></a>        <span class="k">return</span> <span class="n">out</span>
+</span><span id="L-233"><a href="#L-233"><span class="linenos">233</span></a>
+</span><span id="L-234"><a href="#L-234"><span class="linenos">234</span></a>    <span class="c1"># Exact solution of the linear ODE over each step; decay factor precomputed.</span>
+</span><span id="L-235"><a href="#L-235"><span class="linenos">235</span></a>    <span class="n">decay</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">q</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">/</span> <span class="n">volume</span><span class="p">)</span>
+</span><span id="L-236"><a href="#L-236"><span class="linenos">236</span></a>    <span class="k">with</span> <span class="n">np</span><span class="o">.</span><span class="n">errstate</span><span class="p">(</span><span class="n">divide</span><span class="o">=</span><span class="s2">&quot;ignore&quot;</span><span class="p">,</span> <span class="n">invalid</span><span class="o">=</span><span class="s2">&quot;ignore&quot;</span><span class="p">):</span>
+</span><span id="L-237"><a href="#L-237"><span class="linenos">237</span></a>        <span class="n">steady</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">q</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="n">outdoor</span> <span class="o">+</span> <span class="n">source</span> <span class="o">/</span> <span class="n">q</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">)</span>
+</span><span id="L-238"><a href="#L-238"><span class="linenos">238</span></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">people</span><span class="p">)):</span>
+</span><span id="L-239"><a href="#L-239"><span class="linenos">239</span></a>        <span class="n">c</span> <span class="o">=</span> <span class="n">steady</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="p">(</span><span class="n">c</span> <span class="o">-</span> <span class="n">steady</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">*</span> <span class="n">decay</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">if</span> <span class="n">q</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="n">c</span> <span class="o">+</span> <span class="n">source</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">/</span> <span class="n">volume</span>
+</span><span id="L-240"><a href="#L-240"><span class="linenos">240</span></a>        <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">c</span>
+</span><span id="L-241"><a href="#L-241"><span class="linenos">241</span></a>    <span class="k">return</span> <span class="n">out</span>
+</span><span id="L-242"><a href="#L-242"><span class="linenos">242</span></a>
+</span><span id="L-243"><a href="#L-243"><span class="linenos">243</span></a>
+</span><span id="L-244"><a href="#L-244"><span class="linenos">244</span></a><span class="k">def</span><span class="w"> </span><span class="nf">assess</span><span class="p">(</span><span class="n">people</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">airflow</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">co2</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+</span><span id="L-245"><a href="#L-245"><span class="linenos">245</span></a>           <span class="n">limit</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">CO2_LIMIT</span><span class="p">,</span> <span class="n">mask</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+</span><span id="L-246"><a href="#L-246"><span class="linenos">246</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Energy and air-quality measures of a ventilation strategy.</span>
+</span><span id="L-247"><a href="#L-247"><span class="linenos">247</span></a>
+</span><span id="L-248"><a href="#L-248"><span class="linenos">248</span></a><span class="sd">    Parameters</span>
+</span><span id="L-249"><a href="#L-249"><span class="linenos">249</span></a><span class="sd">    ----------</span>
+</span><span id="L-250"><a href="#L-250"><span class="linenos">250</span></a><span class="sd">    people, airflow, co2 : array_like</span>
+</span><span id="L-251"><a href="#L-251"><span class="linenos">251</span></a><span class="sd">        People, outdoor-air supply (L/s) and simulated CO2 (ppm) per step.</span>
+</span><span id="L-252"><a href="#L-252"><span class="linenos">252</span></a><span class="sd">    dt : float</span>
+</span><span id="L-253"><a href="#L-253"><span class="linenos">253</span></a><span class="sd">        Time step, seconds.</span>
+</span><span id="L-254"><a href="#L-254"><span class="linenos">254</span></a><span class="sd">    limit : float, default 1000.0</span>
+</span><span id="L-255"><a href="#L-255"><span class="linenos">255</span></a><span class="sd">        CO2 threshold, ppm.</span>
+</span><span id="L-256"><a href="#L-256"><span class="linenos">256</span></a><span class="sd">    mask : array_like of bool, optional</span>
+</span><span id="L-257"><a href="#L-257"><span class="linenos">257</span></a><span class="sd">        Steps to include (e.g. excluding sensor outages). All if ``None``.</span>
+</span><span id="L-258"><a href="#L-258"><span class="linenos">258</span></a>
+</span><span id="L-259"><a href="#L-259"><span class="linenos">259</span></a><span class="sd">    Returns</span>
+</span><span id="L-260"><a href="#L-260"><span class="linenos">260</span></a><span class="sd">    -------</span>
+</span><span id="L-261"><a href="#L-261"><span class="linenos">261</span></a><span class="sd">    dict</span>
+</span><span id="L-262"><a href="#L-262"><span class="linenos">262</span></a><span class="sd">        - ``air_m3``: total outdoor air supplied, m3 (proxy for fan and</span>
+</span><span id="L-263"><a href="#L-263"><span class="linenos">263</span></a><span class="sd">          conditioning energy);</span>
+</span><span id="L-264"><a href="#L-264"><span class="linenos">264</span></a><span class="sd">        - ``required_m3``: outdoor air needed at the per-person rate, m3;</span>
+</span><span id="L-265"><a href="#L-265"><span class="linenos">265</span></a><span class="sd">        - ``person_hours_over_limit``: person-hours spent above ``limit``;</span>
+</span><span id="L-266"><a href="#L-266"><span class="linenos">266</span></a><span class="sd">        - ``share_occupied_time_over_limit``: share of occupied time above it;</span>
+</span><span id="L-267"><a href="#L-267"><span class="linenos">267</span></a><span class="sd">        - ``peak_ppm``: highest CO2 while occupied;</span>
+</span><span id="L-268"><a href="#L-268"><span class="linenos">268</span></a><span class="sd">        - ``mean_occupied_ppm``: mean CO2 while occupied.</span>
+</span><span id="L-269"><a href="#L-269"><span class="linenos">269</span></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="L-270"><a href="#L-270"><span class="linenos">270</span></a>    <span class="n">people</span><span class="p">,</span> <span class="n">airflow</span><span class="p">,</span> <span class="n">co2</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="p">(</span><span class="n">people</span><span class="p">,</span> <span class="n">airflow</span><span class="p">,</span> <span class="n">co2</span><span class="p">))</span>
+</span><span id="L-271"><a href="#L-271"><span class="linenos">271</span></a>    <span class="n">m</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">people</span><span class="p">),</span> <span class="nb">bool</span><span class="p">)</span> <span class="k">if</span> <span class="n">mask</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="nb">bool</span><span class="p">)</span>
+</span><span id="L-272"><a href="#L-272"><span class="linenos">272</span></a>    <span class="n">people</span><span class="p">,</span> <span class="n">airflow</span><span class="p">,</span> <span class="n">co2</span> <span class="o">=</span> <span class="n">people</span><span class="p">[</span><span class="n">m</span><span class="p">],</span> <span class="n">airflow</span><span class="p">[</span><span class="n">m</span><span class="p">],</span> <span class="n">co2</span><span class="p">[</span><span class="n">m</span><span class="p">]</span>
+</span><span id="L-273"><a href="#L-273"><span class="linenos">273</span></a>    <span class="n">occupied</span> <span class="o">=</span> <span class="n">people</span> <span class="o">&gt;</span> <span class="mi">0</span>
+</span><span id="L-274"><a href="#L-274"><span class="linenos">274</span></a>    <span class="n">over</span> <span class="o">=</span> <span class="n">co2</span> <span class="o">&gt;</span> <span class="n">limit</span>
+</span><span id="L-275"><a href="#L-275"><span class="linenos">275</span></a>    <span class="k">return</span> <span class="p">{</span>
+</span><span id="L-276"><a href="#L-276"><span class="linenos">276</span></a>        <span class="s2">&quot;air_m3&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">airflow</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">/</span> <span class="mf">1000.0</span><span class="p">),</span>
+</span><span id="L-277"><a href="#L-277"><span class="linenos">277</span></a>        <span class="s2">&quot;required_m3&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">required_airflow</span><span class="p">(</span><span class="n">people</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">/</span> <span class="mf">1000.0</span><span class="p">),</span>
+</span><span id="L-278"><a href="#L-278"><span class="linenos">278</span></a>        <span class="s2">&quot;person_hours_over_limit&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">((</span><span class="n">people</span> <span class="o">*</span> <span class="n">over</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">/</span> <span class="mf">3600.0</span><span class="p">),</span>
+</span><span id="L-279"><a href="#L-279"><span class="linenos">279</span></a>        <span class="s2">&quot;share_occupied_time_over_limit&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">((</span><span class="n">over</span> <span class="o">&amp;</span> <span class="n">occupied</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">/</span> <span class="nb">max</span><span class="p">(</span><span class="n">occupied</span><span class="o">.</span><span class="n">sum</span><span class="p">(),</span> <span class="mi">1</span><span class="p">)),</span>
+</span><span id="L-280"><a href="#L-280"><span class="linenos">280</span></a>        <span class="s2">&quot;peak_ppm&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">co2</span><span class="p">[</span><span class="n">occupied</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">())</span> <span class="k">if</span> <span class="n">occupied</span><span class="o">.</span><span class="n">any</span><span class="p">()</span> <span class="k">else</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;nan&quot;</span><span class="p">),</span>
+</span><span id="L-281"><a href="#L-281"><span class="linenos">281</span></a>        <span class="s2">&quot;mean_occupied_ppm&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">co2</span><span class="p">[</span><span class="n">occupied</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">())</span> <span class="k">if</span> <span class="n">occupied</span><span class="o">.</span><span class="n">any</span><span class="p">()</span> <span class="k">else</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;nan&quot;</span><span class="p">),</span>
+</span><span id="L-282"><a href="#L-282"><span class="linenos">282</span></a>    <span class="p">}</span>
 </span></pre></div>
 
 
@@ -379,13 +465,27 @@ Persily and de Jonge, 2017).</p>
                 <section id="ROOM_AREA">
                     <div class="attr variable">
             <span class="name">ROOM_AREA</span>        =
-<span class="default_value">30.0</span>
+<span class="default_value">300.0</span>
 
         
     </div>
     <a class="headerlink" href="#ROOM_AREA"></a>
     
-            <div class="docstring"><p>Floor area of G.20, m2 (the student's estimate: about 5 m by 6 m).</p>
+            <div class="docstring"><p>Floor area of G.20, m2 (the student's estimate: about 20 m by 15 m).</p>
+</div>
+
+
+                </section>
+                <section id="DESIGN_QUANTILE">
+                    <div class="attr variable">
+            <span class="name">DESIGN_QUANTILE</span>        =
+<span class="default_value">0.999</span>
+
+        
+    </div>
+    <a class="headerlink" href="#DESIGN_QUANTILE"></a>
+    
+            <div class="docstring"><p>Quantile of the occupied-time headcount that the design occupancy covers.</p>
 </div>
 
 
@@ -425,15 +525,15 @@ when the ventilation is off.</p>
 <div class="attr function">
             
         <span class="def">def</span>
-        <span class="name">infiltration_airflow</span><span class="signature pdoc-code condensed">(<span class="param"><span class="n">ach</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.3</span>, </span><span class="param"><span class="n">volume</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">81.0</span></span><span class="return-annotation">) -> <span class="nb">float</span>:</span></span>
+        <span class="name">infiltration_airflow</span><span class="signature pdoc-code condensed">(<span class="param"><span class="n">ach</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.3</span>, </span><span class="param"><span class="n">volume</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">810.0</span></span><span class="return-annotation">) -> <span class="nb">float</span>:</span></span>
 
                 <label class="view-source-button" for="infiltration_airflow-view-source"><span>View Source</span></label>
 
     </div>
     <a class="headerlink" href="#infiltration_airflow"></a>
-            <div class="pdoc-code codehilite"><pre><span></span><span id="infiltration_airflow-53"><a href="#infiltration_airflow-53"><span class="linenos">53</span></a><span class="k">def</span><span class="w"> </span><span class="nf">infiltration_airflow</span><span class="p">(</span><span class="n">ach</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">INFILTRATION_ACH</span><span class="p">,</span> <span class="n">volume</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">ROOM_AREA</span> <span class="o">*</span> <span class="n">ROOM_HEIGHT</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-</span><span id="infiltration_airflow-54"><a href="#infiltration_airflow-54"><span class="linenos">54</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert air changes per hour to an airflow in L/s (volume x ACH / 3.6).&quot;&quot;&quot;</span>
-</span><span id="infiltration_airflow-55"><a href="#infiltration_airflow-55"><span class="linenos">55</span></a>    <span class="k">return</span> <span class="n">ach</span> <span class="o">*</span> <span class="n">volume</span> <span class="o">/</span> <span class="mf">3.6</span>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="infiltration_airflow-56"><a href="#infiltration_airflow-56"><span class="linenos">56</span></a><span class="k">def</span><span class="w"> </span><span class="nf">infiltration_airflow</span><span class="p">(</span><span class="n">ach</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">INFILTRATION_ACH</span><span class="p">,</span> <span class="n">volume</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">ROOM_AREA</span> <span class="o">*</span> <span class="n">ROOM_HEIGHT</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+</span><span id="infiltration_airflow-57"><a href="#infiltration_airflow-57"><span class="linenos">57</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert air changes per hour to an airflow in L/s (volume x ACH / 3.6).&quot;&quot;&quot;</span>
+</span><span id="infiltration_airflow-58"><a href="#infiltration_airflow-58"><span class="linenos">58</span></a>    <span class="k">return</span> <span class="n">ach</span> <span class="o">*</span> <span class="n">volume</span> <span class="o">/</span> <span class="mf">3.6</span>
 </span></pre></div>
 
 
@@ -453,30 +553,30 @@ when the ventilation is off.</p>
 
     </div>
     <a class="headerlink" href="#required_airflow"></a>
-            <div class="pdoc-code codehilite"><pre><span></span><span id="required_airflow-58"><a href="#required_airflow-58"><span class="linenos">58</span></a><span class="k">def</span><span class="w"> </span><span class="nf">required_airflow</span><span class="p">(</span><span class="n">people</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">rate_per_person</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">RATE_PER_PERSON</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
-</span><span id="required_airflow-59"><a href="#required_airflow-59"><span class="linenos">59</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Outdoor air needed for the people present.</span>
-</span><span id="required_airflow-60"><a href="#required_airflow-60"><span class="linenos">60</span></a>
-</span><span id="required_airflow-61"><a href="#required_airflow-61"><span class="linenos">61</span></a><span class="sd">    Parameters</span>
-</span><span id="required_airflow-62"><a href="#required_airflow-62"><span class="linenos">62</span></a><span class="sd">    ----------</span>
-</span><span id="required_airflow-63"><a href="#required_airflow-63"><span class="linenos">63</span></a><span class="sd">    people : array_like</span>
-</span><span id="required_airflow-64"><a href="#required_airflow-64"><span class="linenos">64</span></a><span class="sd">        Number of people (may be fractional, e.g. an interval&#39;s mean headcount).</span>
-</span><span id="required_airflow-65"><a href="#required_airflow-65"><span class="linenos">65</span></a><span class="sd">    rate_per_person : float, default 10.0</span>
-</span><span id="required_airflow-66"><a href="#required_airflow-66"><span class="linenos">66</span></a><span class="sd">        Outdoor air per person, L/s.</span>
-</span><span id="required_airflow-67"><a href="#required_airflow-67"><span class="linenos">67</span></a>
-</span><span id="required_airflow-68"><a href="#required_airflow-68"><span class="linenos">68</span></a><span class="sd">    Returns</span>
-</span><span id="required_airflow-69"><a href="#required_airflow-69"><span class="linenos">69</span></a><span class="sd">    -------</span>
-</span><span id="required_airflow-70"><a href="#required_airflow-70"><span class="linenos">70</span></a><span class="sd">    numpy.ndarray</span>
-</span><span id="required_airflow-71"><a href="#required_airflow-71"><span class="linenos">71</span></a><span class="sd">        Required outdoor-air supply, L/s.</span>
-</span><span id="required_airflow-72"><a href="#required_airflow-72"><span class="linenos">72</span></a>
-</span><span id="required_airflow-73"><a href="#required_airflow-73"><span class="linenos">73</span></a><span class="sd">    Raises</span>
-</span><span id="required_airflow-74"><a href="#required_airflow-74"><span class="linenos">74</span></a><span class="sd">    ------</span>
-</span><span id="required_airflow-75"><a href="#required_airflow-75"><span class="linenos">75</span></a><span class="sd">    ValueError</span>
-</span><span id="required_airflow-76"><a href="#required_airflow-76"><span class="linenos">76</span></a><span class="sd">        If any value of ``people`` is negative.</span>
-</span><span id="required_airflow-77"><a href="#required_airflow-77"><span class="linenos">77</span></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="required_airflow-78"><a href="#required_airflow-78"><span class="linenos">78</span></a>    <span class="n">people</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">people</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
-</span><span id="required_airflow-79"><a href="#required_airflow-79"><span class="linenos">79</span></a>    <span class="k">if</span> <span class="p">(</span><span class="n">people</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
-</span><span id="required_airflow-80"><a href="#required_airflow-80"><span class="linenos">80</span></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;people must be non-negative&quot;</span><span class="p">)</span>
-</span><span id="required_airflow-81"><a href="#required_airflow-81"><span class="linenos">81</span></a>    <span class="k">return</span> <span class="n">rate_per_person</span> <span class="o">*</span> <span class="n">people</span>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="required_airflow-61"><a href="#required_airflow-61"><span class="linenos">61</span></a><span class="k">def</span><span class="w"> </span><span class="nf">required_airflow</span><span class="p">(</span><span class="n">people</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">rate_per_person</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">RATE_PER_PERSON</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+</span><span id="required_airflow-62"><a href="#required_airflow-62"><span class="linenos">62</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Outdoor air needed for the people present.</span>
+</span><span id="required_airflow-63"><a href="#required_airflow-63"><span class="linenos">63</span></a>
+</span><span id="required_airflow-64"><a href="#required_airflow-64"><span class="linenos">64</span></a><span class="sd">    Parameters</span>
+</span><span id="required_airflow-65"><a href="#required_airflow-65"><span class="linenos">65</span></a><span class="sd">    ----------</span>
+</span><span id="required_airflow-66"><a href="#required_airflow-66"><span class="linenos">66</span></a><span class="sd">    people : array_like</span>
+</span><span id="required_airflow-67"><a href="#required_airflow-67"><span class="linenos">67</span></a><span class="sd">        Number of people (may be fractional, e.g. an interval&#39;s mean headcount).</span>
+</span><span id="required_airflow-68"><a href="#required_airflow-68"><span class="linenos">68</span></a><span class="sd">    rate_per_person : float, default 10.0</span>
+</span><span id="required_airflow-69"><a href="#required_airflow-69"><span class="linenos">69</span></a><span class="sd">        Outdoor air per person, L/s.</span>
+</span><span id="required_airflow-70"><a href="#required_airflow-70"><span class="linenos">70</span></a>
+</span><span id="required_airflow-71"><a href="#required_airflow-71"><span class="linenos">71</span></a><span class="sd">    Returns</span>
+</span><span id="required_airflow-72"><a href="#required_airflow-72"><span class="linenos">72</span></a><span class="sd">    -------</span>
+</span><span id="required_airflow-73"><a href="#required_airflow-73"><span class="linenos">73</span></a><span class="sd">    numpy.ndarray</span>
+</span><span id="required_airflow-74"><a href="#required_airflow-74"><span class="linenos">74</span></a><span class="sd">        Required outdoor-air supply, L/s.</span>
+</span><span id="required_airflow-75"><a href="#required_airflow-75"><span class="linenos">75</span></a>
+</span><span id="required_airflow-76"><a href="#required_airflow-76"><span class="linenos">76</span></a><span class="sd">    Raises</span>
+</span><span id="required_airflow-77"><a href="#required_airflow-77"><span class="linenos">77</span></a><span class="sd">    ------</span>
+</span><span id="required_airflow-78"><a href="#required_airflow-78"><span class="linenos">78</span></a><span class="sd">    ValueError</span>
+</span><span id="required_airflow-79"><a href="#required_airflow-79"><span class="linenos">79</span></a><span class="sd">        If any value of ``people`` is negative.</span>
+</span><span id="required_airflow-80"><a href="#required_airflow-80"><span class="linenos">80</span></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="required_airflow-81"><a href="#required_airflow-81"><span class="linenos">81</span></a>    <span class="n">people</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">people</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+</span><span id="required_airflow-82"><a href="#required_airflow-82"><span class="linenos">82</span></a>    <span class="k">if</span> <span class="p">(</span><span class="n">people</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
+</span><span id="required_airflow-83"><a href="#required_airflow-83"><span class="linenos">83</span></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;people must be non-negative&quot;</span><span class="p">)</span>
+</span><span id="required_airflow-84"><a href="#required_airflow-84"><span class="linenos">84</span></a>    <span class="k">return</span> <span class="n">rate_per_person</span> <span class="o">*</span> <span class="n">people</span>
 </span></pre></div>
 
 
@@ -506,6 +606,172 @@ Outdoor air per person, L/s.</li>
 
 
                 </section>
+                <section id="design_occupancy">
+                            <input id="design_occupancy-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr function">
+            
+        <span class="def">def</span>
+        <span class="name">design_occupancy</span><span class="signature pdoc-code condensed">(<span class="param"><span class="n">headcount</span><span class="p">:</span> <span class="n">numpy</span><span class="o">.</span><span class="n">ndarray</span>, </span><span class="param"><span class="n">quantile</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.999</span></span><span class="return-annotation">) -> <span class="nb">int</span>:</span></span>
+
+                <label class="view-source-button" for="design_occupancy-view-source"><span>View Source</span></label>
+
+    </div>
+    <a class="headerlink" href="#design_occupancy"></a>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="design_occupancy-87"><a href="#design_occupancy-87"><span class="linenos"> 87</span></a><span class="k">def</span><span class="w"> </span><span class="nf">design_occupancy</span><span class="p">(</span><span class="n">headcount</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">quantile</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">DESIGN_QUANTILE</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+</span><span id="design_occupancy-88"><a href="#design_occupancy-88"><span class="linenos"> 88</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Number of people a fixed ventilation design is sized for.</span>
+</span><span id="design_occupancy-89"><a href="#design_occupancy-89"><span class="linenos"> 89</span></a>
+</span><span id="design_occupancy-90"><a href="#design_occupancy-90"><span class="linenos"> 90</span></a><span class="sd">    The ``quantile`` of the headcount over occupied time, rounded up to whole</span>
+</span><span id="design_occupancy-91"><a href="#design_occupancy-91"><span class="linenos"> 91</span></a><span class="sd">    people. Sizing for the very highest reading would let one brief crowd (or</span>
+</span><span id="design_occupancy-92"><a href="#design_occupancy-92"><span class="linenos"> 92</span></a><span class="sd">    sensor glitch) set the airflow for every hour of the year; the 99.9th</span>
+</span><span id="design_occupancy-93"><a href="#design_occupancy-93"><span class="linenos"> 93</span></a><span class="sd">    percentile covers all but the rarest peaks.</span>
+</span><span id="design_occupancy-94"><a href="#design_occupancy-94"><span class="linenos"> 94</span></a>
+</span><span id="design_occupancy-95"><a href="#design_occupancy-95"><span class="linenos"> 95</span></a><span class="sd">    Parameters</span>
+</span><span id="design_occupancy-96"><a href="#design_occupancy-96"><span class="linenos"> 96</span></a><span class="sd">    ----------</span>
+</span><span id="design_occupancy-97"><a href="#design_occupancy-97"><span class="linenos"> 97</span></a><span class="sd">    headcount : array_like</span>
+</span><span id="design_occupancy-98"><a href="#design_occupancy-98"><span class="linenos"> 98</span></a><span class="sd">        Headcount per equal time step (e.g. 1-min means). Zeros (empty room)</span>
+</span><span id="design_occupancy-99"><a href="#design_occupancy-99"><span class="linenos"> 99</span></a><span class="sd">        are ignored.</span>
+</span><span id="design_occupancy-100"><a href="#design_occupancy-100"><span class="linenos">100</span></a><span class="sd">    quantile : float, default 0.999</span>
+</span><span id="design_occupancy-101"><a href="#design_occupancy-101"><span class="linenos">101</span></a><span class="sd">        Share of occupied time the design covers, between 0 and 1.</span>
+</span><span id="design_occupancy-102"><a href="#design_occupancy-102"><span class="linenos">102</span></a>
+</span><span id="design_occupancy-103"><a href="#design_occupancy-103"><span class="linenos">103</span></a><span class="sd">    Returns</span>
+</span><span id="design_occupancy-104"><a href="#design_occupancy-104"><span class="linenos">104</span></a><span class="sd">    -------</span>
+</span><span id="design_occupancy-105"><a href="#design_occupancy-105"><span class="linenos">105</span></a><span class="sd">    int</span>
+</span><span id="design_occupancy-106"><a href="#design_occupancy-106"><span class="linenos">106</span></a><span class="sd">        Design occupancy, people.</span>
+</span><span id="design_occupancy-107"><a href="#design_occupancy-107"><span class="linenos">107</span></a>
+</span><span id="design_occupancy-108"><a href="#design_occupancy-108"><span class="linenos">108</span></a><span class="sd">    Raises</span>
+</span><span id="design_occupancy-109"><a href="#design_occupancy-109"><span class="linenos">109</span></a><span class="sd">    ------</span>
+</span><span id="design_occupancy-110"><a href="#design_occupancy-110"><span class="linenos">110</span></a><span class="sd">    ValueError</span>
+</span><span id="design_occupancy-111"><a href="#design_occupancy-111"><span class="linenos">111</span></a><span class="sd">        If ``quantile`` is outside (0, 1], any headcount is negative, or the</span>
+</span><span id="design_occupancy-112"><a href="#design_occupancy-112"><span class="linenos">112</span></a><span class="sd">        room is never occupied.</span>
+</span><span id="design_occupancy-113"><a href="#design_occupancy-113"><span class="linenos">113</span></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="design_occupancy-114"><a href="#design_occupancy-114"><span class="linenos">114</span></a>    <span class="n">headcount</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">headcount</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+</span><span id="design_occupancy-115"><a href="#design_occupancy-115"><span class="linenos">115</span></a>    <span class="k">if</span> <span class="ow">not</span> <span class="mi">0</span> <span class="o">&lt;</span> <span class="n">quantile</span> <span class="o">&lt;=</span> <span class="mi">1</span><span class="p">:</span>
+</span><span id="design_occupancy-116"><a href="#design_occupancy-116"><span class="linenos">116</span></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;quantile must be in (0, 1]&quot;</span><span class="p">)</span>
+</span><span id="design_occupancy-117"><a href="#design_occupancy-117"><span class="linenos">117</span></a>    <span class="k">if</span> <span class="p">(</span><span class="n">headcount</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
+</span><span id="design_occupancy-118"><a href="#design_occupancy-118"><span class="linenos">118</span></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;headcount must be non-negative&quot;</span><span class="p">)</span>
+</span><span id="design_occupancy-119"><a href="#design_occupancy-119"><span class="linenos">119</span></a>    <span class="n">occupied</span> <span class="o">=</span> <span class="n">headcount</span><span class="p">[</span><span class="n">headcount</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">]</span>
+</span><span id="design_occupancy-120"><a href="#design_occupancy-120"><span class="linenos">120</span></a>    <span class="k">if</span> <span class="n">occupied</span><span class="o">.</span><span class="n">size</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+</span><span id="design_occupancy-121"><a href="#design_occupancy-121"><span class="linenos">121</span></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;the room is never occupied&quot;</span><span class="p">)</span>
+</span><span id="design_occupancy-122"><a href="#design_occupancy-122"><span class="linenos">122</span></a>    <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">quantile</span><span class="p">(</span><span class="n">occupied</span><span class="p">,</span> <span class="n">quantile</span><span class="p">)))</span>
+</span></pre></div>
+
+
+            <div class="docstring"><p>Number of people a fixed ventilation design is sized for.</p>
+
+<p>The <code>quantile</code> of the headcount over occupied time, rounded up to whole
+people. Sizing for the very highest reading would let one brief crowd (or
+sensor glitch) set the airflow for every hour of the year; the 99.9th
+percentile covers all but the rarest peaks.</p>
+
+<h6 id="parameters">Parameters</h6>
+
+<ul>
+<li><strong>headcount</strong> (array_like):
+Headcount per equal time step (e.g. 1-min means). Zeros (empty room)
+are ignored.</li>
+<li><strong>quantile</strong> (float, default 0.999):
+Share of occupied time the design covers, between 0 and 1.</li>
+</ul>
+
+<h6 id="returns">Returns</h6>
+
+<ul>
+<li><strong>int</strong>: Design occupancy, people.</li>
+</ul>
+
+<h6 id="raises">Raises</h6>
+
+<ul>
+<li><strong>ValueError</strong>: If <code>quantile</code> is outside (0, 1], any headcount is negative, or the
+room is never occupied.</li>
+</ul>
+</div>
+
+
+                </section>
+                <section id="fallback_airflow">
+                            <input id="fallback_airflow-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr function">
+            
+        <span class="def">def</span>
+        <span class="name">fallback_airflow</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="n">usual_headcount</span><span class="p">:</span> <span class="n">numpy</span><span class="o">.</span><span class="n">ndarray</span>,</span><span class="param">	<span class="n">design_people</span><span class="p">:</span> <span class="nb">float</span>,</span><span class="param">	<span class="n">threshold</span><span class="p">:</span> <span class="nb">float</span>,</span><span class="param">	<span class="n">rate_per_person</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">10.0</span></span><span class="return-annotation">) -> <span class="n">numpy</span><span class="o">.</span><span class="n">ndarray</span>:</span></span>
+
+                <label class="view-source-button" for="fallback_airflow-view-source"><span>View Source</span></label>
+
+    </div>
+    <a class="headerlink" href="#fallback_airflow"></a>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="fallback_airflow-125"><a href="#fallback_airflow-125"><span class="linenos">125</span></a><span class="k">def</span><span class="w"> </span><span class="nf">fallback_airflow</span><span class="p">(</span><span class="n">usual_headcount</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">design_people</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">threshold</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+</span><span id="fallback_airflow-126"><a href="#fallback_airflow-126"><span class="linenos">126</span></a>                     <span class="n">rate_per_person</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">RATE_PER_PERSON</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+</span><span id="fallback_airflow-127"><a href="#fallback_airflow-127"><span class="linenos">127</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Outdoor air to supply while the headcount sensor is known to be dead.</span>
+</span><span id="fallback_airflow-128"><a href="#fallback_airflow-128"><span class="linenos">128</span></a>
+</span><span id="fallback_airflow-129"><a href="#fallback_airflow-129"><span class="linenos">129</span></a><span class="sd">    Without a live reading the controller cannot see how many people are in</span>
+</span><span id="fallback_airflow-130"><a href="#fallback_airflow-130"><span class="linenos">130</span></a><span class="sd">    the room, so the fallback is sized to be safe rather than efficient: full</span>
+</span><span id="fallback_airflow-131"><a href="#fallback_airflow-131"><span class="linenos">131</span></a><span class="sd">    design air whenever the room is usually in use (its average headcount for</span>
+</span><span id="fallback_airflow-132"><a href="#fallback_airflow-132"><span class="linenos">132</span></a><span class="sd">    that time of the week exceeds ``threshold``), and none otherwise.</span>
+</span><span id="fallback_airflow-133"><a href="#fallback_airflow-133"><span class="linenos">133</span></a>
+</span><span id="fallback_airflow-134"><a href="#fallback_airflow-134"><span class="linenos">134</span></a><span class="sd">    Parameters</span>
+</span><span id="fallback_airflow-135"><a href="#fallback_airflow-135"><span class="linenos">135</span></a><span class="sd">    ----------</span>
+</span><span id="fallback_airflow-136"><a href="#fallback_airflow-136"><span class="linenos">136</span></a><span class="sd">    usual_headcount : array_like</span>
+</span><span id="fallback_airflow-137"><a href="#fallback_airflow-137"><span class="linenos">137</span></a><span class="sd">        Average headcount for each step&#39;s time of the week, from past data.</span>
+</span><span id="fallback_airflow-138"><a href="#fallback_airflow-138"><span class="linenos">138</span></a><span class="sd">    design_people : float</span>
+</span><span id="fallback_airflow-139"><a href="#fallback_airflow-139"><span class="linenos">139</span></a><span class="sd">        Design occupancy, people (see :func:`design_occupancy`).</span>
+</span><span id="fallback_airflow-140"><a href="#fallback_airflow-140"><span class="linenos">140</span></a><span class="sd">    threshold : float</span>
+</span><span id="fallback_airflow-141"><a href="#fallback_airflow-141"><span class="linenos">141</span></a><span class="sd">        Average headcount above which the room counts as usually in use.</span>
+</span><span id="fallback_airflow-142"><a href="#fallback_airflow-142"><span class="linenos">142</span></a><span class="sd">    rate_per_person : float, default 10.0</span>
+</span><span id="fallback_airflow-143"><a href="#fallback_airflow-143"><span class="linenos">143</span></a><span class="sd">        Outdoor air per person, L/s.</span>
+</span><span id="fallback_airflow-144"><a href="#fallback_airflow-144"><span class="linenos">144</span></a>
+</span><span id="fallback_airflow-145"><a href="#fallback_airflow-145"><span class="linenos">145</span></a><span class="sd">    Returns</span>
+</span><span id="fallback_airflow-146"><a href="#fallback_airflow-146"><span class="linenos">146</span></a><span class="sd">    -------</span>
+</span><span id="fallback_airflow-147"><a href="#fallback_airflow-147"><span class="linenos">147</span></a><span class="sd">    numpy.ndarray</span>
+</span><span id="fallback_airflow-148"><a href="#fallback_airflow-148"><span class="linenos">148</span></a><span class="sd">        Outdoor-air supply, L/s: ``rate_per_person * design_people`` or 0.</span>
+</span><span id="fallback_airflow-149"><a href="#fallback_airflow-149"><span class="linenos">149</span></a>
+</span><span id="fallback_airflow-150"><a href="#fallback_airflow-150"><span class="linenos">150</span></a><span class="sd">    Raises</span>
+</span><span id="fallback_airflow-151"><a href="#fallback_airflow-151"><span class="linenos">151</span></a><span class="sd">    ------</span>
+</span><span id="fallback_airflow-152"><a href="#fallback_airflow-152"><span class="linenos">152</span></a><span class="sd">    ValueError</span>
+</span><span id="fallback_airflow-153"><a href="#fallback_airflow-153"><span class="linenos">153</span></a><span class="sd">        If ``usual_headcount``, ``design_people`` or ``threshold`` is negative.</span>
+</span><span id="fallback_airflow-154"><a href="#fallback_airflow-154"><span class="linenos">154</span></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="fallback_airflow-155"><a href="#fallback_airflow-155"><span class="linenos">155</span></a>    <span class="n">usual_headcount</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">usual_headcount</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+</span><span id="fallback_airflow-156"><a href="#fallback_airflow-156"><span class="linenos">156</span></a>    <span class="k">if</span> <span class="p">(</span><span class="n">usual_headcount</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">()</span> <span class="ow">or</span> <span class="n">design_people</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">threshold</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+</span><span id="fallback_airflow-157"><a href="#fallback_airflow-157"><span class="linenos">157</span></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;usual_headcount, design_people and threshold must be non-negative&quot;</span><span class="p">)</span>
+</span><span id="fallback_airflow-158"><a href="#fallback_airflow-158"><span class="linenos">158</span></a>    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">usual_headcount</span> <span class="o">&gt;</span> <span class="n">threshold</span><span class="p">,</span> <span class="n">rate_per_person</span> <span class="o">*</span> <span class="n">design_people</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
+</span></pre></div>
+
+
+            <div class="docstring"><p>Outdoor air to supply while the headcount sensor is known to be dead.</p>
+
+<p>Without a live reading the controller cannot see how many people are in
+the room, so the fallback is sized to be safe rather than efficient: full
+design air whenever the room is usually in use (its average headcount for
+that time of the week exceeds <code>threshold</code>), and none otherwise.</p>
+
+<h6 id="parameters">Parameters</h6>
+
+<ul>
+<li><strong>usual_headcount</strong> (array_like):
+Average headcount for each step's time of the week, from past data.</li>
+<li><strong>design_people</strong> (float):
+Design occupancy, people (see <code><a href="#design_occupancy">design_occupancy()</a></code>).</li>
+<li><strong>threshold</strong> (float):
+Average headcount above which the room counts as usually in use.</li>
+<li><strong>rate_per_person</strong> (float, default 10.0):
+Outdoor air per person, L/s.</li>
+</ul>
+
+<h6 id="returns">Returns</h6>
+
+<ul>
+<li><strong>numpy.ndarray</strong>: Outdoor-air supply, L/s: <code>rate_per_person * design_people</code> or 0.</li>
+</ul>
+
+<h6 id="raises">Raises</h6>
+
+<ul>
+<li><strong>ValueError</strong>: If <code>usual_headcount</code>, <code>design_people</code> or <code>threshold</code> is negative.</li>
+</ul>
+</div>
+
+
+                </section>
                 <section id="steady_state_co2">
                             <input id="steady_state_co2-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
@@ -517,15 +783,15 @@ Outdoor air per person, L/s.</li>
 
     </div>
     <a class="headerlink" href="#steady_state_co2"></a>
-            <div class="pdoc-code codehilite"><pre><span></span><span id="steady_state_co2-84"><a href="#steady_state_co2-84"><span class="linenos">84</span></a><span class="k">def</span><span class="w"> </span><span class="nf">steady_state_co2</span><span class="p">(</span><span class="n">rate_per_person</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">RATE_PER_PERSON</span><span class="p">,</span> <span class="n">generation</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">CO2_GENERATION</span><span class="p">,</span>
-</span><span id="steady_state_co2-85"><a href="#steady_state_co2-85"><span class="linenos">85</span></a>                     <span class="n">outdoor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">OUTDOOR_CO2</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-</span><span id="steady_state_co2-86"><a href="#steady_state_co2-86"><span class="linenos">86</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;CO2 level a room settles at when supplied exactly ``rate_per_person``.</span>
-</span><span id="steady_state_co2-87"><a href="#steady_state_co2-87"><span class="linenos">87</span></a>
-</span><span id="steady_state_co2-88"><a href="#steady_state_co2-88"><span class="linenos">88</span></a><span class="sd">    With Q = rate x N, the steady state C_out + G N / Q does not depend on N.</span>
-</span><span id="steady_state_co2-89"><a href="#steady_state_co2-89"><span class="linenos">89</span></a><span class="sd">    At 10 L/s per person it is 420 + 0.0052 / 10 x 1e6 = 940 ppm, just under</span>
-</span><span id="steady_state_co2-90"><a href="#steady_state_co2-90"><span class="linenos">90</span></a><span class="sd">    the 1000 ppm limit, which is why that rate is a common design value.</span>
-</span><span id="steady_state_co2-91"><a href="#steady_state_co2-91"><span class="linenos">91</span></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="steady_state_co2-92"><a href="#steady_state_co2-92"><span class="linenos">92</span></a>    <span class="k">return</span> <span class="n">outdoor</span> <span class="o">+</span> <span class="n">generation</span> <span class="o">/</span> <span class="n">rate_per_person</span> <span class="o">*</span> <span class="mf">1e6</span>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="steady_state_co2-161"><a href="#steady_state_co2-161"><span class="linenos">161</span></a><span class="k">def</span><span class="w"> </span><span class="nf">steady_state_co2</span><span class="p">(</span><span class="n">rate_per_person</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">RATE_PER_PERSON</span><span class="p">,</span> <span class="n">generation</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">CO2_GENERATION</span><span class="p">,</span>
+</span><span id="steady_state_co2-162"><a href="#steady_state_co2-162"><span class="linenos">162</span></a>                     <span class="n">outdoor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">OUTDOOR_CO2</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+</span><span id="steady_state_co2-163"><a href="#steady_state_co2-163"><span class="linenos">163</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;CO2 level a room settles at when supplied exactly ``rate_per_person``.</span>
+</span><span id="steady_state_co2-164"><a href="#steady_state_co2-164"><span class="linenos">164</span></a>
+</span><span id="steady_state_co2-165"><a href="#steady_state_co2-165"><span class="linenos">165</span></a><span class="sd">    With Q = rate x N, the steady state C_out + G N / Q does not depend on N.</span>
+</span><span id="steady_state_co2-166"><a href="#steady_state_co2-166"><span class="linenos">166</span></a><span class="sd">    At 10 L/s per person it is 420 + 0.0052 / 10 x 1e6 = 940 ppm, just under</span>
+</span><span id="steady_state_co2-167"><a href="#steady_state_co2-167"><span class="linenos">167</span></a><span class="sd">    the 1000 ppm limit, which is why that rate is a common design value.</span>
+</span><span id="steady_state_co2-168"><a href="#steady_state_co2-168"><span class="linenos">168</span></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="steady_state_co2-169"><a href="#steady_state_co2-169"><span class="linenos">169</span></a>    <span class="k">return</span> <span class="n">outdoor</span> <span class="o">+</span> <span class="n">generation</span> <span class="o">/</span> <span class="n">rate_per_person</span> <span class="o">*</span> <span class="mf">1e6</span>
 </span></pre></div>
 
 
@@ -543,83 +809,83 @@ the 1000 ppm limit, which is why that rate is a common design value.</p>
 <div class="attr function">
             
         <span class="def">def</span>
-        <span class="name">simulate_co2</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="n">people</span><span class="p">:</span> <span class="n">numpy</span><span class="o">.</span><span class="n">ndarray</span>,</span><span class="param">	<span class="n">airflow</span><span class="p">:</span> <span class="n">numpy</span><span class="o">.</span><span class="n">ndarray</span>,</span><span class="param">	<span class="n">dt</span><span class="p">:</span> <span class="nb">float</span>,</span><span class="param">	<span class="n">volume</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">81.0</span>,</span><span class="param">	<span class="n">generation</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0052</span>,</span><span class="param">	<span class="n">outdoor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">420.0</span>,</span><span class="param">	<span class="n">initial</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;exact&#39;</span></span><span class="return-annotation">) -> <span class="n">numpy</span><span class="o">.</span><span class="n">ndarray</span>:</span></span>
+        <span class="name">simulate_co2</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="n">people</span><span class="p">:</span> <span class="n">numpy</span><span class="o">.</span><span class="n">ndarray</span>,</span><span class="param">	<span class="n">airflow</span><span class="p">:</span> <span class="n">numpy</span><span class="o">.</span><span class="n">ndarray</span>,</span><span class="param">	<span class="n">dt</span><span class="p">:</span> <span class="nb">float</span>,</span><span class="param">	<span class="n">volume</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">810.0</span>,</span><span class="param">	<span class="n">generation</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0052</span>,</span><span class="param">	<span class="n">outdoor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">420.0</span>,</span><span class="param">	<span class="n">initial</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;exact&#39;</span></span><span class="return-annotation">) -> <span class="n">numpy</span><span class="o">.</span><span class="n">ndarray</span>:</span></span>
 
                 <label class="view-source-button" for="simulate_co2-view-source"><span>View Source</span></label>
 
     </div>
     <a class="headerlink" href="#simulate_co2"></a>
-            <div class="pdoc-code codehilite"><pre><span></span><span id="simulate_co2-95"><a href="#simulate_co2-95"><span class="linenos"> 95</span></a><span class="k">def</span><span class="w"> </span><span class="nf">simulate_co2</span><span class="p">(</span>
-</span><span id="simulate_co2-96"><a href="#simulate_co2-96"><span class="linenos"> 96</span></a>    <span class="n">people</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
-</span><span id="simulate_co2-97"><a href="#simulate_co2-97"><span class="linenos"> 97</span></a>    <span class="n">airflow</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
-</span><span id="simulate_co2-98"><a href="#simulate_co2-98"><span class="linenos"> 98</span></a>    <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
-</span><span id="simulate_co2-99"><a href="#simulate_co2-99"><span class="linenos"> 99</span></a>    <span class="n">volume</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">ROOM_AREA</span> <span class="o">*</span> <span class="n">ROOM_HEIGHT</span><span class="p">,</span>
-</span><span id="simulate_co2-100"><a href="#simulate_co2-100"><span class="linenos">100</span></a>    <span class="n">generation</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">CO2_GENERATION</span><span class="p">,</span>
-</span><span id="simulate_co2-101"><a href="#simulate_co2-101"><span class="linenos">101</span></a>    <span class="n">outdoor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">OUTDOOR_CO2</span><span class="p">,</span>
-</span><span id="simulate_co2-102"><a href="#simulate_co2-102"><span class="linenos">102</span></a>    <span class="n">initial</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="simulate_co2-103"><a href="#simulate_co2-103"><span class="linenos">103</span></a>    <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;exact&quot;</span><span class="p">,</span>
-</span><span id="simulate_co2-104"><a href="#simulate_co2-104"><span class="linenos">104</span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
-</span><span id="simulate_co2-105"><a href="#simulate_co2-105"><span class="linenos">105</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Simulate indoor CO2 for piecewise-constant occupancy and airflow.</span>
-</span><span id="simulate_co2-106"><a href="#simulate_co2-106"><span class="linenos">106</span></a>
-</span><span id="simulate_co2-107"><a href="#simulate_co2-107"><span class="linenos">107</span></a><span class="sd">    Parameters</span>
-</span><span id="simulate_co2-108"><a href="#simulate_co2-108"><span class="linenos">108</span></a><span class="sd">    ----------</span>
-</span><span id="simulate_co2-109"><a href="#simulate_co2-109"><span class="linenos">109</span></a><span class="sd">    people : array_like</span>
-</span><span id="simulate_co2-110"><a href="#simulate_co2-110"><span class="linenos">110</span></a><span class="sd">        People present in each time step.</span>
-</span><span id="simulate_co2-111"><a href="#simulate_co2-111"><span class="linenos">111</span></a><span class="sd">    airflow : array_like</span>
-</span><span id="simulate_co2-112"><a href="#simulate_co2-112"><span class="linenos">112</span></a><span class="sd">        Outdoor-air supply in each time step, L/s (same length as ``people``).</span>
-</span><span id="simulate_co2-113"><a href="#simulate_co2-113"><span class="linenos">113</span></a><span class="sd">    dt : float</span>
-</span><span id="simulate_co2-114"><a href="#simulate_co2-114"><span class="linenos">114</span></a><span class="sd">        Time step, seconds.</span>
-</span><span id="simulate_co2-115"><a href="#simulate_co2-115"><span class="linenos">115</span></a><span class="sd">    volume : float, default 81.0</span>
-</span><span id="simulate_co2-116"><a href="#simulate_co2-116"><span class="linenos">116</span></a><span class="sd">        Room volume, m3.</span>
-</span><span id="simulate_co2-117"><a href="#simulate_co2-117"><span class="linenos">117</span></a><span class="sd">    generation : float, default 0.0052</span>
-</span><span id="simulate_co2-118"><a href="#simulate_co2-118"><span class="linenos">118</span></a><span class="sd">        CO2 generated per person, L/s.</span>
-</span><span id="simulate_co2-119"><a href="#simulate_co2-119"><span class="linenos">119</span></a><span class="sd">    outdoor : float, default 420.0</span>
-</span><span id="simulate_co2-120"><a href="#simulate_co2-120"><span class="linenos">120</span></a><span class="sd">        Outdoor CO2, ppm.</span>
-</span><span id="simulate_co2-121"><a href="#simulate_co2-121"><span class="linenos">121</span></a><span class="sd">    initial : float, optional</span>
-</span><span id="simulate_co2-122"><a href="#simulate_co2-122"><span class="linenos">122</span></a><span class="sd">        CO2 at the start, ppm. Defaults to ``outdoor``.</span>
-</span><span id="simulate_co2-123"><a href="#simulate_co2-123"><span class="linenos">123</span></a><span class="sd">    method : {&quot;exact&quot;, &quot;euler&quot;}, default &quot;exact&quot;</span>
-</span><span id="simulate_co2-124"><a href="#simulate_co2-124"><span class="linenos">124</span></a><span class="sd">        ``&quot;exact&quot;`` uses the analytical solution within each step;</span>
-</span><span id="simulate_co2-125"><a href="#simulate_co2-125"><span class="linenos">125</span></a><span class="sd">        ``&quot;euler&quot;`` uses the explicit Euler method.</span>
-</span><span id="simulate_co2-126"><a href="#simulate_co2-126"><span class="linenos">126</span></a>
-</span><span id="simulate_co2-127"><a href="#simulate_co2-127"><span class="linenos">127</span></a><span class="sd">    Returns</span>
-</span><span id="simulate_co2-128"><a href="#simulate_co2-128"><span class="linenos">128</span></a><span class="sd">    -------</span>
-</span><span id="simulate_co2-129"><a href="#simulate_co2-129"><span class="linenos">129</span></a><span class="sd">    numpy.ndarray</span>
-</span><span id="simulate_co2-130"><a href="#simulate_co2-130"><span class="linenos">130</span></a><span class="sd">        CO2 at the end of each step, ppm (same length as ``people``).</span>
-</span><span id="simulate_co2-131"><a href="#simulate_co2-131"><span class="linenos">131</span></a>
-</span><span id="simulate_co2-132"><a href="#simulate_co2-132"><span class="linenos">132</span></a><span class="sd">    Raises</span>
-</span><span id="simulate_co2-133"><a href="#simulate_co2-133"><span class="linenos">133</span></a><span class="sd">    ------</span>
-</span><span id="simulate_co2-134"><a href="#simulate_co2-134"><span class="linenos">134</span></a><span class="sd">    ValueError</span>
-</span><span id="simulate_co2-135"><a href="#simulate_co2-135"><span class="linenos">135</span></a><span class="sd">        If the inputs differ in length, contain negative values, ``dt`` or</span>
-</span><span id="simulate_co2-136"><a href="#simulate_co2-136"><span class="linenos">136</span></a><span class="sd">        ``volume`` is not positive, or ``method`` is unknown.</span>
-</span><span id="simulate_co2-137"><a href="#simulate_co2-137"><span class="linenos">137</span></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="simulate_co2-138"><a href="#simulate_co2-138"><span class="linenos">138</span></a>    <span class="n">people</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">people</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
-</span><span id="simulate_co2-139"><a href="#simulate_co2-139"><span class="linenos">139</span></a>    <span class="n">q</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">airflow</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span> <span class="o">/</span> <span class="mf">1000.0</span>           <span class="c1"># m3/s</span>
-</span><span id="simulate_co2-140"><a href="#simulate_co2-140"><span class="linenos">140</span></a>    <span class="k">if</span> <span class="n">people</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="n">q</span><span class="o">.</span><span class="n">shape</span><span class="p">:</span>
-</span><span id="simulate_co2-141"><a href="#simulate_co2-141"><span class="linenos">141</span></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;people and airflow must have the same length&quot;</span><span class="p">)</span>
-</span><span id="simulate_co2-142"><a href="#simulate_co2-142"><span class="linenos">142</span></a>    <span class="k">if</span> <span class="p">(</span><span class="n">people</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">()</span> <span class="ow">or</span> <span class="p">(</span><span class="n">q</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
-</span><span id="simulate_co2-143"><a href="#simulate_co2-143"><span class="linenos">143</span></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;people and airflow must be non-negative&quot;</span><span class="p">)</span>
-</span><span id="simulate_co2-144"><a href="#simulate_co2-144"><span class="linenos">144</span></a>    <span class="k">if</span> <span class="n">dt</span> <span class="o">&lt;=</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">volume</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
-</span><span id="simulate_co2-145"><a href="#simulate_co2-145"><span class="linenos">145</span></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;dt and volume must be positive&quot;</span><span class="p">)</span>
-</span><span id="simulate_co2-146"><a href="#simulate_co2-146"><span class="linenos">146</span></a>    <span class="k">if</span> <span class="n">method</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;exact&quot;</span><span class="p">,</span> <span class="s2">&quot;euler&quot;</span><span class="p">):</span>
-</span><span id="simulate_co2-147"><a href="#simulate_co2-147"><span class="linenos">147</span></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown method &#39;</span><span class="si">{</span><span class="n">method</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
-</span><span id="simulate_co2-148"><a href="#simulate_co2-148"><span class="linenos">148</span></a>
-</span><span id="simulate_co2-149"><a href="#simulate_co2-149"><span class="linenos">149</span></a>    <span class="n">source</span> <span class="o">=</span> <span class="n">generation</span> <span class="o">/</span> <span class="mf">1000.0</span> <span class="o">*</span> <span class="n">people</span> <span class="o">*</span> <span class="mf">1e6</span>               <span class="c1"># ppm * m3/s added by occupants</span>
-</span><span id="simulate_co2-150"><a href="#simulate_co2-150"><span class="linenos">150</span></a>    <span class="n">c</span> <span class="o">=</span> <span class="n">outdoor</span> <span class="k">if</span> <span class="n">initial</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="nb">float</span><span class="p">(</span><span class="n">initial</span><span class="p">)</span>
-</span><span id="simulate_co2-151"><a href="#simulate_co2-151"><span class="linenos">151</span></a>    <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">people</span><span class="p">))</span>
-</span><span id="simulate_co2-152"><a href="#simulate_co2-152"><span class="linenos">152</span></a>    <span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">&quot;euler&quot;</span><span class="p">:</span>
-</span><span id="simulate_co2-153"><a href="#simulate_co2-153"><span class="linenos">153</span></a>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">people</span><span class="p">)):</span>
-</span><span id="simulate_co2-154"><a href="#simulate_co2-154"><span class="linenos">154</span></a>            <span class="n">c</span> <span class="o">+=</span> <span class="n">dt</span> <span class="o">*</span> <span class="p">(</span><span class="n">source</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="n">q</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="n">outdoor</span> <span class="o">-</span> <span class="n">c</span><span class="p">))</span> <span class="o">/</span> <span class="n">volume</span>
-</span><span id="simulate_co2-155"><a href="#simulate_co2-155"><span class="linenos">155</span></a>            <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">c</span>
-</span><span id="simulate_co2-156"><a href="#simulate_co2-156"><span class="linenos">156</span></a>        <span class="k">return</span> <span class="n">out</span>
-</span><span id="simulate_co2-157"><a href="#simulate_co2-157"><span class="linenos">157</span></a>
-</span><span id="simulate_co2-158"><a href="#simulate_co2-158"><span class="linenos">158</span></a>    <span class="c1"># Exact solution of the linear ODE over each step; decay factor precomputed.</span>
-</span><span id="simulate_co2-159"><a href="#simulate_co2-159"><span class="linenos">159</span></a>    <span class="n">decay</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">q</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">/</span> <span class="n">volume</span><span class="p">)</span>
-</span><span id="simulate_co2-160"><a href="#simulate_co2-160"><span class="linenos">160</span></a>    <span class="k">with</span> <span class="n">np</span><span class="o">.</span><span class="n">errstate</span><span class="p">(</span><span class="n">divide</span><span class="o">=</span><span class="s2">&quot;ignore&quot;</span><span class="p">,</span> <span class="n">invalid</span><span class="o">=</span><span class="s2">&quot;ignore&quot;</span><span class="p">):</span>
-</span><span id="simulate_co2-161"><a href="#simulate_co2-161"><span class="linenos">161</span></a>        <span class="n">steady</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">q</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="n">outdoor</span> <span class="o">+</span> <span class="n">source</span> <span class="o">/</span> <span class="n">q</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">)</span>
-</span><span id="simulate_co2-162"><a href="#simulate_co2-162"><span class="linenos">162</span></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">people</span><span class="p">)):</span>
-</span><span id="simulate_co2-163"><a href="#simulate_co2-163"><span class="linenos">163</span></a>        <span class="n">c</span> <span class="o">=</span> <span class="n">steady</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="p">(</span><span class="n">c</span> <span class="o">-</span> <span class="n">steady</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">*</span> <span class="n">decay</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">if</span> <span class="n">q</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="n">c</span> <span class="o">+</span> <span class="n">source</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">/</span> <span class="n">volume</span>
-</span><span id="simulate_co2-164"><a href="#simulate_co2-164"><span class="linenos">164</span></a>        <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">c</span>
-</span><span id="simulate_co2-165"><a href="#simulate_co2-165"><span class="linenos">165</span></a>    <span class="k">return</span> <span class="n">out</span>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="simulate_co2-172"><a href="#simulate_co2-172"><span class="linenos">172</span></a><span class="k">def</span><span class="w"> </span><span class="nf">simulate_co2</span><span class="p">(</span>
+</span><span id="simulate_co2-173"><a href="#simulate_co2-173"><span class="linenos">173</span></a>    <span class="n">people</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+</span><span id="simulate_co2-174"><a href="#simulate_co2-174"><span class="linenos">174</span></a>    <span class="n">airflow</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+</span><span id="simulate_co2-175"><a href="#simulate_co2-175"><span class="linenos">175</span></a>    <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+</span><span id="simulate_co2-176"><a href="#simulate_co2-176"><span class="linenos">176</span></a>    <span class="n">volume</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">ROOM_AREA</span> <span class="o">*</span> <span class="n">ROOM_HEIGHT</span><span class="p">,</span>
+</span><span id="simulate_co2-177"><a href="#simulate_co2-177"><span class="linenos">177</span></a>    <span class="n">generation</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">CO2_GENERATION</span><span class="p">,</span>
+</span><span id="simulate_co2-178"><a href="#simulate_co2-178"><span class="linenos">178</span></a>    <span class="n">outdoor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">OUTDOOR_CO2</span><span class="p">,</span>
+</span><span id="simulate_co2-179"><a href="#simulate_co2-179"><span class="linenos">179</span></a>    <span class="n">initial</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="simulate_co2-180"><a href="#simulate_co2-180"><span class="linenos">180</span></a>    <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;exact&quot;</span><span class="p">,</span>
+</span><span id="simulate_co2-181"><a href="#simulate_co2-181"><span class="linenos">181</span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+</span><span id="simulate_co2-182"><a href="#simulate_co2-182"><span class="linenos">182</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Simulate indoor CO2 for piecewise-constant occupancy and airflow.</span>
+</span><span id="simulate_co2-183"><a href="#simulate_co2-183"><span class="linenos">183</span></a>
+</span><span id="simulate_co2-184"><a href="#simulate_co2-184"><span class="linenos">184</span></a><span class="sd">    Parameters</span>
+</span><span id="simulate_co2-185"><a href="#simulate_co2-185"><span class="linenos">185</span></a><span class="sd">    ----------</span>
+</span><span id="simulate_co2-186"><a href="#simulate_co2-186"><span class="linenos">186</span></a><span class="sd">    people : array_like</span>
+</span><span id="simulate_co2-187"><a href="#simulate_co2-187"><span class="linenos">187</span></a><span class="sd">        People present in each time step.</span>
+</span><span id="simulate_co2-188"><a href="#simulate_co2-188"><span class="linenos">188</span></a><span class="sd">    airflow : array_like</span>
+</span><span id="simulate_co2-189"><a href="#simulate_co2-189"><span class="linenos">189</span></a><span class="sd">        Outdoor-air supply in each time step, L/s (same length as ``people``).</span>
+</span><span id="simulate_co2-190"><a href="#simulate_co2-190"><span class="linenos">190</span></a><span class="sd">    dt : float</span>
+</span><span id="simulate_co2-191"><a href="#simulate_co2-191"><span class="linenos">191</span></a><span class="sd">        Time step, seconds.</span>
+</span><span id="simulate_co2-192"><a href="#simulate_co2-192"><span class="linenos">192</span></a><span class="sd">    volume : float, default 810.0</span>
+</span><span id="simulate_co2-193"><a href="#simulate_co2-193"><span class="linenos">193</span></a><span class="sd">        Room volume, m3.</span>
+</span><span id="simulate_co2-194"><a href="#simulate_co2-194"><span class="linenos">194</span></a><span class="sd">    generation : float, default 0.0052</span>
+</span><span id="simulate_co2-195"><a href="#simulate_co2-195"><span class="linenos">195</span></a><span class="sd">        CO2 generated per person, L/s.</span>
+</span><span id="simulate_co2-196"><a href="#simulate_co2-196"><span class="linenos">196</span></a><span class="sd">    outdoor : float, default 420.0</span>
+</span><span id="simulate_co2-197"><a href="#simulate_co2-197"><span class="linenos">197</span></a><span class="sd">        Outdoor CO2, ppm.</span>
+</span><span id="simulate_co2-198"><a href="#simulate_co2-198"><span class="linenos">198</span></a><span class="sd">    initial : float, optional</span>
+</span><span id="simulate_co2-199"><a href="#simulate_co2-199"><span class="linenos">199</span></a><span class="sd">        CO2 at the start, ppm. Defaults to ``outdoor``.</span>
+</span><span id="simulate_co2-200"><a href="#simulate_co2-200"><span class="linenos">200</span></a><span class="sd">    method : {&quot;exact&quot;, &quot;euler&quot;}, default &quot;exact&quot;</span>
+</span><span id="simulate_co2-201"><a href="#simulate_co2-201"><span class="linenos">201</span></a><span class="sd">        ``&quot;exact&quot;`` uses the analytical solution within each step;</span>
+</span><span id="simulate_co2-202"><a href="#simulate_co2-202"><span class="linenos">202</span></a><span class="sd">        ``&quot;euler&quot;`` uses the explicit Euler method.</span>
+</span><span id="simulate_co2-203"><a href="#simulate_co2-203"><span class="linenos">203</span></a>
+</span><span id="simulate_co2-204"><a href="#simulate_co2-204"><span class="linenos">204</span></a><span class="sd">    Returns</span>
+</span><span id="simulate_co2-205"><a href="#simulate_co2-205"><span class="linenos">205</span></a><span class="sd">    -------</span>
+</span><span id="simulate_co2-206"><a href="#simulate_co2-206"><span class="linenos">206</span></a><span class="sd">    numpy.ndarray</span>
+</span><span id="simulate_co2-207"><a href="#simulate_co2-207"><span class="linenos">207</span></a><span class="sd">        CO2 at the end of each step, ppm (same length as ``people``).</span>
+</span><span id="simulate_co2-208"><a href="#simulate_co2-208"><span class="linenos">208</span></a>
+</span><span id="simulate_co2-209"><a href="#simulate_co2-209"><span class="linenos">209</span></a><span class="sd">    Raises</span>
+</span><span id="simulate_co2-210"><a href="#simulate_co2-210"><span class="linenos">210</span></a><span class="sd">    ------</span>
+</span><span id="simulate_co2-211"><a href="#simulate_co2-211"><span class="linenos">211</span></a><span class="sd">    ValueError</span>
+</span><span id="simulate_co2-212"><a href="#simulate_co2-212"><span class="linenos">212</span></a><span class="sd">        If the inputs differ in length, contain negative values, ``dt`` or</span>
+</span><span id="simulate_co2-213"><a href="#simulate_co2-213"><span class="linenos">213</span></a><span class="sd">        ``volume`` is not positive, or ``method`` is unknown.</span>
+</span><span id="simulate_co2-214"><a href="#simulate_co2-214"><span class="linenos">214</span></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="simulate_co2-215"><a href="#simulate_co2-215"><span class="linenos">215</span></a>    <span class="n">people</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">people</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+</span><span id="simulate_co2-216"><a href="#simulate_co2-216"><span class="linenos">216</span></a>    <span class="n">q</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">airflow</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span> <span class="o">/</span> <span class="mf">1000.0</span>           <span class="c1"># m3/s</span>
+</span><span id="simulate_co2-217"><a href="#simulate_co2-217"><span class="linenos">217</span></a>    <span class="k">if</span> <span class="n">people</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="n">q</span><span class="o">.</span><span class="n">shape</span><span class="p">:</span>
+</span><span id="simulate_co2-218"><a href="#simulate_co2-218"><span class="linenos">218</span></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;people and airflow must have the same length&quot;</span><span class="p">)</span>
+</span><span id="simulate_co2-219"><a href="#simulate_co2-219"><span class="linenos">219</span></a>    <span class="k">if</span> <span class="p">(</span><span class="n">people</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">()</span> <span class="ow">or</span> <span class="p">(</span><span class="n">q</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
+</span><span id="simulate_co2-220"><a href="#simulate_co2-220"><span class="linenos">220</span></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;people and airflow must be non-negative&quot;</span><span class="p">)</span>
+</span><span id="simulate_co2-221"><a href="#simulate_co2-221"><span class="linenos">221</span></a>    <span class="k">if</span> <span class="n">dt</span> <span class="o">&lt;=</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">volume</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+</span><span id="simulate_co2-222"><a href="#simulate_co2-222"><span class="linenos">222</span></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;dt and volume must be positive&quot;</span><span class="p">)</span>
+</span><span id="simulate_co2-223"><a href="#simulate_co2-223"><span class="linenos">223</span></a>    <span class="k">if</span> <span class="n">method</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;exact&quot;</span><span class="p">,</span> <span class="s2">&quot;euler&quot;</span><span class="p">):</span>
+</span><span id="simulate_co2-224"><a href="#simulate_co2-224"><span class="linenos">224</span></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown method &#39;</span><span class="si">{</span><span class="n">method</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+</span><span id="simulate_co2-225"><a href="#simulate_co2-225"><span class="linenos">225</span></a>
+</span><span id="simulate_co2-226"><a href="#simulate_co2-226"><span class="linenos">226</span></a>    <span class="n">source</span> <span class="o">=</span> <span class="n">generation</span> <span class="o">/</span> <span class="mf">1000.0</span> <span class="o">*</span> <span class="n">people</span> <span class="o">*</span> <span class="mf">1e6</span>               <span class="c1"># ppm * m3/s added by occupants</span>
+</span><span id="simulate_co2-227"><a href="#simulate_co2-227"><span class="linenos">227</span></a>    <span class="n">c</span> <span class="o">=</span> <span class="n">outdoor</span> <span class="k">if</span> <span class="n">initial</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="nb">float</span><span class="p">(</span><span class="n">initial</span><span class="p">)</span>
+</span><span id="simulate_co2-228"><a href="#simulate_co2-228"><span class="linenos">228</span></a>    <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">people</span><span class="p">))</span>
+</span><span id="simulate_co2-229"><a href="#simulate_co2-229"><span class="linenos">229</span></a>    <span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">&quot;euler&quot;</span><span class="p">:</span>
+</span><span id="simulate_co2-230"><a href="#simulate_co2-230"><span class="linenos">230</span></a>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">people</span><span class="p">)):</span>
+</span><span id="simulate_co2-231"><a href="#simulate_co2-231"><span class="linenos">231</span></a>            <span class="n">c</span> <span class="o">+=</span> <span class="n">dt</span> <span class="o">*</span> <span class="p">(</span><span class="n">source</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="n">q</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="n">outdoor</span> <span class="o">-</span> <span class="n">c</span><span class="p">))</span> <span class="o">/</span> <span class="n">volume</span>
+</span><span id="simulate_co2-232"><a href="#simulate_co2-232"><span class="linenos">232</span></a>            <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">c</span>
+</span><span id="simulate_co2-233"><a href="#simulate_co2-233"><span class="linenos">233</span></a>        <span class="k">return</span> <span class="n">out</span>
+</span><span id="simulate_co2-234"><a href="#simulate_co2-234"><span class="linenos">234</span></a>
+</span><span id="simulate_co2-235"><a href="#simulate_co2-235"><span class="linenos">235</span></a>    <span class="c1"># Exact solution of the linear ODE over each step; decay factor precomputed.</span>
+</span><span id="simulate_co2-236"><a href="#simulate_co2-236"><span class="linenos">236</span></a>    <span class="n">decay</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">q</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">/</span> <span class="n">volume</span><span class="p">)</span>
+</span><span id="simulate_co2-237"><a href="#simulate_co2-237"><span class="linenos">237</span></a>    <span class="k">with</span> <span class="n">np</span><span class="o">.</span><span class="n">errstate</span><span class="p">(</span><span class="n">divide</span><span class="o">=</span><span class="s2">&quot;ignore&quot;</span><span class="p">,</span> <span class="n">invalid</span><span class="o">=</span><span class="s2">&quot;ignore&quot;</span><span class="p">):</span>
+</span><span id="simulate_co2-238"><a href="#simulate_co2-238"><span class="linenos">238</span></a>        <span class="n">steady</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">q</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="n">outdoor</span> <span class="o">+</span> <span class="n">source</span> <span class="o">/</span> <span class="n">q</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">)</span>
+</span><span id="simulate_co2-239"><a href="#simulate_co2-239"><span class="linenos">239</span></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">people</span><span class="p">)):</span>
+</span><span id="simulate_co2-240"><a href="#simulate_co2-240"><span class="linenos">240</span></a>        <span class="n">c</span> <span class="o">=</span> <span class="n">steady</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="p">(</span><span class="n">c</span> <span class="o">-</span> <span class="n">steady</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">*</span> <span class="n">decay</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">if</span> <span class="n">q</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="n">c</span> <span class="o">+</span> <span class="n">source</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">/</span> <span class="n">volume</span>
+</span><span id="simulate_co2-241"><a href="#simulate_co2-241"><span class="linenos">241</span></a>        <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">c</span>
+</span><span id="simulate_co2-242"><a href="#simulate_co2-242"><span class="linenos">242</span></a>    <span class="k">return</span> <span class="n">out</span>
 </span></pre></div>
 
 
@@ -634,7 +900,7 @@ People present in each time step.</li>
 Outdoor-air supply in each time step, L/s (same length as <code>people</code>).</li>
 <li><strong>dt</strong> (float):
 Time step, seconds.</li>
-<li><strong>volume</strong> (float, default 81.0):
+<li><strong>volume</strong> (float, default 810.0):
 Room volume, m3.</li>
 <li><strong>generation</strong> (float, default 0.0052):
 CO2 generated per person, L/s.</li>
@@ -674,45 +940,45 @@ CO2 at the start, ppm. Defaults to <code>outdoor</code>.</li>
 
     </div>
     <a class="headerlink" href="#assess"></a>
-            <div class="pdoc-code codehilite"><pre><span></span><span id="assess-168"><a href="#assess-168"><span class="linenos">168</span></a><span class="k">def</span><span class="w"> </span><span class="nf">assess</span><span class="p">(</span><span class="n">people</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">airflow</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">co2</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
-</span><span id="assess-169"><a href="#assess-169"><span class="linenos">169</span></a>           <span class="n">limit</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">CO2_LIMIT</span><span class="p">,</span> <span class="n">mask</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
-</span><span id="assess-170"><a href="#assess-170"><span class="linenos">170</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Energy and air-quality measures of a ventilation strategy.</span>
-</span><span id="assess-171"><a href="#assess-171"><span class="linenos">171</span></a>
-</span><span id="assess-172"><a href="#assess-172"><span class="linenos">172</span></a><span class="sd">    Parameters</span>
-</span><span id="assess-173"><a href="#assess-173"><span class="linenos">173</span></a><span class="sd">    ----------</span>
-</span><span id="assess-174"><a href="#assess-174"><span class="linenos">174</span></a><span class="sd">    people, airflow, co2 : array_like</span>
-</span><span id="assess-175"><a href="#assess-175"><span class="linenos">175</span></a><span class="sd">        People, outdoor-air supply (L/s) and simulated CO2 (ppm) per step.</span>
-</span><span id="assess-176"><a href="#assess-176"><span class="linenos">176</span></a><span class="sd">    dt : float</span>
-</span><span id="assess-177"><a href="#assess-177"><span class="linenos">177</span></a><span class="sd">        Time step, seconds.</span>
-</span><span id="assess-178"><a href="#assess-178"><span class="linenos">178</span></a><span class="sd">    limit : float, default 1000.0</span>
-</span><span id="assess-179"><a href="#assess-179"><span class="linenos">179</span></a><span class="sd">        CO2 threshold, ppm.</span>
-</span><span id="assess-180"><a href="#assess-180"><span class="linenos">180</span></a><span class="sd">    mask : array_like of bool, optional</span>
-</span><span id="assess-181"><a href="#assess-181"><span class="linenos">181</span></a><span class="sd">        Steps to include (e.g. excluding sensor outages). All if ``None``.</span>
-</span><span id="assess-182"><a href="#assess-182"><span class="linenos">182</span></a>
-</span><span id="assess-183"><a href="#assess-183"><span class="linenos">183</span></a><span class="sd">    Returns</span>
-</span><span id="assess-184"><a href="#assess-184"><span class="linenos">184</span></a><span class="sd">    -------</span>
-</span><span id="assess-185"><a href="#assess-185"><span class="linenos">185</span></a><span class="sd">    dict</span>
-</span><span id="assess-186"><a href="#assess-186"><span class="linenos">186</span></a><span class="sd">        - ``air_m3``: total outdoor air supplied, m3 (proxy for fan and</span>
-</span><span id="assess-187"><a href="#assess-187"><span class="linenos">187</span></a><span class="sd">          conditioning energy);</span>
-</span><span id="assess-188"><a href="#assess-188"><span class="linenos">188</span></a><span class="sd">        - ``required_m3``: outdoor air needed at the per-person rate, m3;</span>
-</span><span id="assess-189"><a href="#assess-189"><span class="linenos">189</span></a><span class="sd">        - ``person_hours_over_limit``: person-hours spent above ``limit``;</span>
-</span><span id="assess-190"><a href="#assess-190"><span class="linenos">190</span></a><span class="sd">        - ``share_occupied_time_over_limit``: share of occupied time above it;</span>
-</span><span id="assess-191"><a href="#assess-191"><span class="linenos">191</span></a><span class="sd">        - ``peak_ppm``: highest CO2 while occupied;</span>
-</span><span id="assess-192"><a href="#assess-192"><span class="linenos">192</span></a><span class="sd">        - ``mean_occupied_ppm``: mean CO2 while occupied.</span>
-</span><span id="assess-193"><a href="#assess-193"><span class="linenos">193</span></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="assess-194"><a href="#assess-194"><span class="linenos">194</span></a>    <span class="n">people</span><span class="p">,</span> <span class="n">airflow</span><span class="p">,</span> <span class="n">co2</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="p">(</span><span class="n">people</span><span class="p">,</span> <span class="n">airflow</span><span class="p">,</span> <span class="n">co2</span><span class="p">))</span>
-</span><span id="assess-195"><a href="#assess-195"><span class="linenos">195</span></a>    <span class="n">m</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">people</span><span class="p">),</span> <span class="nb">bool</span><span class="p">)</span> <span class="k">if</span> <span class="n">mask</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="nb">bool</span><span class="p">)</span>
-</span><span id="assess-196"><a href="#assess-196"><span class="linenos">196</span></a>    <span class="n">people</span><span class="p">,</span> <span class="n">airflow</span><span class="p">,</span> <span class="n">co2</span> <span class="o">=</span> <span class="n">people</span><span class="p">[</span><span class="n">m</span><span class="p">],</span> <span class="n">airflow</span><span class="p">[</span><span class="n">m</span><span class="p">],</span> <span class="n">co2</span><span class="p">[</span><span class="n">m</span><span class="p">]</span>
-</span><span id="assess-197"><a href="#assess-197"><span class="linenos">197</span></a>    <span class="n">occupied</span> <span class="o">=</span> <span class="n">people</span> <span class="o">&gt;</span> <span class="mi">0</span>
-</span><span id="assess-198"><a href="#assess-198"><span class="linenos">198</span></a>    <span class="n">over</span> <span class="o">=</span> <span class="n">co2</span> <span class="o">&gt;</span> <span class="n">limit</span>
-</span><span id="assess-199"><a href="#assess-199"><span class="linenos">199</span></a>    <span class="k">return</span> <span class="p">{</span>
-</span><span id="assess-200"><a href="#assess-200"><span class="linenos">200</span></a>        <span class="s2">&quot;air_m3&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">airflow</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">/</span> <span class="mf">1000.0</span><span class="p">),</span>
-</span><span id="assess-201"><a href="#assess-201"><span class="linenos">201</span></a>        <span class="s2">&quot;required_m3&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">required_airflow</span><span class="p">(</span><span class="n">people</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">/</span> <span class="mf">1000.0</span><span class="p">),</span>
-</span><span id="assess-202"><a href="#assess-202"><span class="linenos">202</span></a>        <span class="s2">&quot;person_hours_over_limit&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">((</span><span class="n">people</span> <span class="o">*</span> <span class="n">over</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">/</span> <span class="mf">3600.0</span><span class="p">),</span>
-</span><span id="assess-203"><a href="#assess-203"><span class="linenos">203</span></a>        <span class="s2">&quot;share_occupied_time_over_limit&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">((</span><span class="n">over</span> <span class="o">&amp;</span> <span class="n">occupied</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">/</span> <span class="nb">max</span><span class="p">(</span><span class="n">occupied</span><span class="o">.</span><span class="n">sum</span><span class="p">(),</span> <span class="mi">1</span><span class="p">)),</span>
-</span><span id="assess-204"><a href="#assess-204"><span class="linenos">204</span></a>        <span class="s2">&quot;peak_ppm&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">co2</span><span class="p">[</span><span class="n">occupied</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">())</span> <span class="k">if</span> <span class="n">occupied</span><span class="o">.</span><span class="n">any</span><span class="p">()</span> <span class="k">else</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;nan&quot;</span><span class="p">),</span>
-</span><span id="assess-205"><a href="#assess-205"><span class="linenos">205</span></a>        <span class="s2">&quot;mean_occupied_ppm&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">co2</span><span class="p">[</span><span class="n">occupied</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">())</span> <span class="k">if</span> <span class="n">occupied</span><span class="o">.</span><span class="n">any</span><span class="p">()</span> <span class="k">else</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;nan&quot;</span><span class="p">),</span>
-</span><span id="assess-206"><a href="#assess-206"><span class="linenos">206</span></a>    <span class="p">}</span>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="assess-245"><a href="#assess-245"><span class="linenos">245</span></a><span class="k">def</span><span class="w"> </span><span class="nf">assess</span><span class="p">(</span><span class="n">people</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">airflow</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">co2</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+</span><span id="assess-246"><a href="#assess-246"><span class="linenos">246</span></a>           <span class="n">limit</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">CO2_LIMIT</span><span class="p">,</span> <span class="n">mask</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+</span><span id="assess-247"><a href="#assess-247"><span class="linenos">247</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Energy and air-quality measures of a ventilation strategy.</span>
+</span><span id="assess-248"><a href="#assess-248"><span class="linenos">248</span></a>
+</span><span id="assess-249"><a href="#assess-249"><span class="linenos">249</span></a><span class="sd">    Parameters</span>
+</span><span id="assess-250"><a href="#assess-250"><span class="linenos">250</span></a><span class="sd">    ----------</span>
+</span><span id="assess-251"><a href="#assess-251"><span class="linenos">251</span></a><span class="sd">    people, airflow, co2 : array_like</span>
+</span><span id="assess-252"><a href="#assess-252"><span class="linenos">252</span></a><span class="sd">        People, outdoor-air supply (L/s) and simulated CO2 (ppm) per step.</span>
+</span><span id="assess-253"><a href="#assess-253"><span class="linenos">253</span></a><span class="sd">    dt : float</span>
+</span><span id="assess-254"><a href="#assess-254"><span class="linenos">254</span></a><span class="sd">        Time step, seconds.</span>
+</span><span id="assess-255"><a href="#assess-255"><span class="linenos">255</span></a><span class="sd">    limit : float, default 1000.0</span>
+</span><span id="assess-256"><a href="#assess-256"><span class="linenos">256</span></a><span class="sd">        CO2 threshold, ppm.</span>
+</span><span id="assess-257"><a href="#assess-257"><span class="linenos">257</span></a><span class="sd">    mask : array_like of bool, optional</span>
+</span><span id="assess-258"><a href="#assess-258"><span class="linenos">258</span></a><span class="sd">        Steps to include (e.g. excluding sensor outages). All if ``None``.</span>
+</span><span id="assess-259"><a href="#assess-259"><span class="linenos">259</span></a>
+</span><span id="assess-260"><a href="#assess-260"><span class="linenos">260</span></a><span class="sd">    Returns</span>
+</span><span id="assess-261"><a href="#assess-261"><span class="linenos">261</span></a><span class="sd">    -------</span>
+</span><span id="assess-262"><a href="#assess-262"><span class="linenos">262</span></a><span class="sd">    dict</span>
+</span><span id="assess-263"><a href="#assess-263"><span class="linenos">263</span></a><span class="sd">        - ``air_m3``: total outdoor air supplied, m3 (proxy for fan and</span>
+</span><span id="assess-264"><a href="#assess-264"><span class="linenos">264</span></a><span class="sd">          conditioning energy);</span>
+</span><span id="assess-265"><a href="#assess-265"><span class="linenos">265</span></a><span class="sd">        - ``required_m3``: outdoor air needed at the per-person rate, m3;</span>
+</span><span id="assess-266"><a href="#assess-266"><span class="linenos">266</span></a><span class="sd">        - ``person_hours_over_limit``: person-hours spent above ``limit``;</span>
+</span><span id="assess-267"><a href="#assess-267"><span class="linenos">267</span></a><span class="sd">        - ``share_occupied_time_over_limit``: share of occupied time above it;</span>
+</span><span id="assess-268"><a href="#assess-268"><span class="linenos">268</span></a><span class="sd">        - ``peak_ppm``: highest CO2 while occupied;</span>
+</span><span id="assess-269"><a href="#assess-269"><span class="linenos">269</span></a><span class="sd">        - ``mean_occupied_ppm``: mean CO2 while occupied.</span>
+</span><span id="assess-270"><a href="#assess-270"><span class="linenos">270</span></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="assess-271"><a href="#assess-271"><span class="linenos">271</span></a>    <span class="n">people</span><span class="p">,</span> <span class="n">airflow</span><span class="p">,</span> <span class="n">co2</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="p">(</span><span class="n">people</span><span class="p">,</span> <span class="n">airflow</span><span class="p">,</span> <span class="n">co2</span><span class="p">))</span>
+</span><span id="assess-272"><a href="#assess-272"><span class="linenos">272</span></a>    <span class="n">m</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">people</span><span class="p">),</span> <span class="nb">bool</span><span class="p">)</span> <span class="k">if</span> <span class="n">mask</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="nb">bool</span><span class="p">)</span>
+</span><span id="assess-273"><a href="#assess-273"><span class="linenos">273</span></a>    <span class="n">people</span><span class="p">,</span> <span class="n">airflow</span><span class="p">,</span> <span class="n">co2</span> <span class="o">=</span> <span class="n">people</span><span class="p">[</span><span class="n">m</span><span class="p">],</span> <span class="n">airflow</span><span class="p">[</span><span class="n">m</span><span class="p">],</span> <span class="n">co2</span><span class="p">[</span><span class="n">m</span><span class="p">]</span>
+</span><span id="assess-274"><a href="#assess-274"><span class="linenos">274</span></a>    <span class="n">occupied</span> <span class="o">=</span> <span class="n">people</span> <span class="o">&gt;</span> <span class="mi">0</span>
+</span><span id="assess-275"><a href="#assess-275"><span class="linenos">275</span></a>    <span class="n">over</span> <span class="o">=</span> <span class="n">co2</span> <span class="o">&gt;</span> <span class="n">limit</span>
+</span><span id="assess-276"><a href="#assess-276"><span class="linenos">276</span></a>    <span class="k">return</span> <span class="p">{</span>
+</span><span id="assess-277"><a href="#assess-277"><span class="linenos">277</span></a>        <span class="s2">&quot;air_m3&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">airflow</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">/</span> <span class="mf">1000.0</span><span class="p">),</span>
+</span><span id="assess-278"><a href="#assess-278"><span class="linenos">278</span></a>        <span class="s2">&quot;required_m3&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">required_airflow</span><span class="p">(</span><span class="n">people</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">/</span> <span class="mf">1000.0</span><span class="p">),</span>
+</span><span id="assess-279"><a href="#assess-279"><span class="linenos">279</span></a>        <span class="s2">&quot;person_hours_over_limit&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">((</span><span class="n">people</span> <span class="o">*</span> <span class="n">over</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">/</span> <span class="mf">3600.0</span><span class="p">),</span>
+</span><span id="assess-280"><a href="#assess-280"><span class="linenos">280</span></a>        <span class="s2">&quot;share_occupied_time_over_limit&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">((</span><span class="n">over</span> <span class="o">&amp;</span> <span class="n">occupied</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">/</span> <span class="nb">max</span><span class="p">(</span><span class="n">occupied</span><span class="o">.</span><span class="n">sum</span><span class="p">(),</span> <span class="mi">1</span><span class="p">)),</span>
+</span><span id="assess-281"><a href="#assess-281"><span class="linenos">281</span></a>        <span class="s2">&quot;peak_ppm&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">co2</span><span class="p">[</span><span class="n">occupied</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">())</span> <span class="k">if</span> <span class="n">occupied</span><span class="o">.</span><span class="n">any</span><span class="p">()</span> <span class="k">else</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;nan&quot;</span><span class="p">),</span>
+</span><span id="assess-282"><a href="#assess-282"><span class="linenos">282</span></a>        <span class="s2">&quot;mean_occupied_ppm&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">co2</span><span class="p">[</span><span class="n">occupied</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">())</span> <span class="k">if</span> <span class="n">occupied</span><span class="o">.</span><span class="n">any</span><span class="p">()</span> <span class="k">else</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;nan&quot;</span><span class="p">),</span>
+</span><span id="assess-283"><a href="#assess-283"><span class="linenos">283</span></a>    <span class="p">}</span>
 </span></pre></div>
 
 

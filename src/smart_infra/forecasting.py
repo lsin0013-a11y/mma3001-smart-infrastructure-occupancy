@@ -15,10 +15,7 @@ Models (see :func:`make_models`):
 - **gradient boosting**: trees on the same inputs, which can capture
   interactions (e.g. Friday afternoons in exam periods);
 - **gradient boosting, calendar only**: the same model without recent
-  headcounts, i.e. what can be forecast a day or more ahead;
-- **gradient boosting, 90th percentile**: predicts a headcount that is
-  exceeded only 10% of the time, because under-ventilating is worse than
-  over-ventilating.
+  headcounts, i.e. what can be forecast a day or more ahead.
 """
 
 from __future__ import annotations
@@ -168,10 +165,14 @@ def _linear() -> SklearnModel:
     return SklearnModel(make_pipeline(pre, Ridge(alpha=1.0)), categorical + numeric)
 
 
-def _boosting(columns: list[str], quantile: float | None = None, **params) -> SklearnModel:
+def _boosting(columns: list[str], **params) -> SklearnModel:
     categorical = [c in ("day_of_week", "period") for c in columns]
-    loss = {"loss": "quantile", "quantile": quantile} if quantile is not None else {}
-    estimator = HistGradientBoostingRegressor(categorical_features=categorical, random_state=0, **loss, **params)
+    # Early stopping off: it holds out a random 10% of the training rows and
+    # stops on that score, and floating-point noise in the inputs (1e-14)
+    # changed where it stopped (91 vs 300 iterations, MAE 0.398 vs 0.405), so
+    # results were not reproducible. ``max_iter`` is the tuned setting instead.
+    estimator = HistGradientBoostingRegressor(categorical_features=categorical, random_state=0,
+                                              early_stopping=False, **params)
     return SklearnModel(estimator, columns)
 
 
@@ -193,7 +194,6 @@ def make_models(boosting_params: dict | None = None) -> dict[str, object]:
         "linear": _linear(),
         "boosting": _boosting(all_cols, **params),
         "boosting_calendar_only": _boosting(calendar_cols, **params),
-        "boosting_q90": _boosting(all_cols, quantile=0.9, **params),
     }
 
 
@@ -234,7 +234,7 @@ def tune_boosting(train: pd.DataFrame, grid: list[dict], n_splits: int = 3) -> t
     return best, pd.DataFrame(rows).sort_values("mean_mae", ignore_index=True)
 
 
-def evaluate(y_true: pd.Series, y_pred: np.ndarray, quantile: float | None = None) -> dict[str, float]:
+def evaluate(y_true: pd.Series, y_pred: np.ndarray) -> dict[str, float]:
     """Forecast accuracy metrics.
 
     Parameters
@@ -243,24 +243,18 @@ def evaluate(y_true: pd.Series, y_pred: np.ndarray, quantile: float | None = Non
         Observed mean headcount.
     y_pred : numpy.ndarray
         Forecast mean headcount.
-    quantile : float, optional
-        If the forecast is a quantile, also report the pinball loss for it.
 
     Returns
     -------
     dict
         ``mae`` and ``rmse`` (people), ``bias`` (mean of forecast - observed),
         ``under_share`` (share of intervals where the forecast is below the
-        observation, i.e. the room would be under-ventilated), and
-        ``pinball`` if ``quantile`` is given.
+        observation, i.e. the room would be under-ventilated).
     """
     err = np.asarray(y_pred) - y_true.to_numpy()
-    metrics = {
+    return {
         "mae": float(np.abs(err).mean()),
         "rmse": float(np.sqrt((err ** 2).mean())),
         "bias": float(err.mean()),
         "under_share": float((err < -1e-9).mean()),
     }
-    if quantile is not None:
-        metrics["pinball"] = float(np.mean(np.maximum(quantile * -err, (quantile - 1) * -err)))
-    return metrics

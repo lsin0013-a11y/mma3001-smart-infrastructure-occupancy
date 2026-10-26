@@ -3,7 +3,14 @@
 import numpy as np
 import pytest
 
-from smart_infra.ventilation import assess, required_airflow, simulate_co2, steady_state_co2
+from smart_infra.ventilation import (
+    assess,
+    design_occupancy,
+    fallback_airflow,
+    required_airflow,
+    simulate_co2,
+    steady_state_co2,
+)
 
 
 def test_required_airflow_scales_with_people():
@@ -49,8 +56,8 @@ def test_euler_error_shrinks_linearly_with_step():
 def test_euler_is_unstable_beyond_its_step_limit():
     # Stability needs Q dt / V < 2. 81 m3 at 300 L/s gives a limit of 540 s.
     people, airflow = np.full(30, 2.0), np.full(30, 300.0)
-    stable = simulate_co2(people, airflow, dt=300.0, method="euler")
-    unstable = simulate_co2(people, airflow, dt=900.0, method="euler")
+    stable = simulate_co2(people, airflow, dt=300.0, volume=81.0, method="euler")
+    unstable = simulate_co2(people, airflow, dt=900.0, volume=81.0, method="euler")
     assert np.all(np.isfinite(stable)) and stable.max() < 2000
     assert np.abs(np.diff(unstable[-5:])).min() > 1000  # growing oscillation
 
@@ -76,3 +83,27 @@ def test_assess_counts_person_hours_over_limit():
     assert result["share_occupied_time_over_limit"] == pytest.approx(0.5)
     assert result["air_m3"] == pytest.approx(72.0)  # 40 L/s x 1800 s
     assert result["peak_ppm"] == 1100
+
+
+def test_design_occupancy_is_a_quantile_of_occupied_time_rounded_up():
+    # Empty steps are ignored: 1,000 occupied minutes at 1..1000 people.
+    headcount = np.concatenate([np.zeros(5000), np.arange(1, 1001)])
+    assert design_occupancy(headcount, quantile=0.5) == 501
+    assert design_occupancy(headcount, quantile=1.0) == 1000
+    assert design_occupancy([0, 2.2, 2.2]) == 3
+
+
+def test_design_occupancy_rejects_bad_inputs():
+    with pytest.raises(ValueError):
+        design_occupancy([0, 0])
+    with pytest.raises(ValueError):
+        design_occupancy([1, 2], quantile=0)
+    with pytest.raises(ValueError):
+        design_occupancy([-1, 2])
+
+
+def test_fallback_supplies_design_air_only_when_room_is_usually_in_use():
+    usual = np.array([0.0, 0.2, 0.3, 4.0])
+    assert list(fallback_airflow(usual, design_people=40, threshold=0.25)) == [0.0, 0.0, 400.0, 400.0]
+    with pytest.raises(ValueError):
+        fallback_airflow(usual, design_people=40, threshold=-1)

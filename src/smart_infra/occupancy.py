@@ -39,9 +39,10 @@ DEFAULT_MAX_HOLD = "5min"
 """Longest time an event's status is assumed to hold without a new event.
 On G.20, 99.9% of gaps between consecutive occupied events are under 340 s."""
 
-DEFAULT_CAPACITY = 20
-"""Most people G.20 can physically hold: about 30 m2 (the student's estimate)
-at 1.5 m2 per person. Higher readings are treated as sensor errors."""
+DEFAULT_CAPACITY = 200
+"""Most people G.20 can physically hold: about 300 m2 (20 m by 15 m, the
+student's estimate) at 1.5 m2 per person. Higher readings are treated as
+sensor errors. No G.20 reading reaches it (the highest is 72)."""
 
 EVENT_COLUMNS = ["id", "timestamp", "status", "headcount"]
 """Columns :func:`clean_events` expects, renamed from the raw export."""
@@ -360,7 +361,7 @@ def build_occupancy_table(
         Passed to :func:`events_to_intervals`.
     max_hold : str, default "5min"
         Passed to :func:`events_to_intervals`.
-    capacity : int or None, default 20
+    capacity : int or None, default 200
         Passed to :func:`events_to_intervals`; ``None`` disables ``OCC-CAP-01``.
     max_gap : str, default "24h"
         Passed to :func:`flag_outages`.
